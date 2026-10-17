@@ -1,6 +1,6 @@
 # Fitness App — MVP specification
 
-Status: architecture approved; Stage 1 authorized and implemented. Stage 2 and later require separate approval.
+Status: architecture approved; Stage 1 completed; Stage 2 authorized, with work stopping at any missing credentials or authorization. Stage 3 and later require separate approval.
 Prepared: 2026-10-17.
 
 ## 1. Project inspection
@@ -137,10 +137,27 @@ Sources checked 2026-10-17. Source mapping will be carried into the in-app metho
 
 ## 12. Approval and external setup dependencies
 
-Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. The architecture and Stage 1 were approved. Stop after Stage 1; each subsequent stage requires explicit approval.
+Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. The architecture and Stages 1–2 were approved. Stop Stage 2 if credentials or authorization are needed. Stage 3 and later require explicit approval.
 
 A real deployment requires access to a user-owned Supabase project (project URL, publishable key, and an approved secure path for migrations), production email configuration, and Sites hosting permissions. No connected Supabase provisioning tool is currently exposed. Verify the available CLI/dashboard authentication after approval; if unavailable, prepare migrations and exact setup steps and request the minimum required connection. Never ask for secret keys in chat. Service costs and plan limits must be checked before any paid provisioning; no paid resource purchase is included in plan approval. Public hosting exposes the app's entry pages, while individual workout records remain private.
 
 ## 13. Approved implementation priorities
 
-Stage 1 only is authorized for the current implementation. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Secure authentication, Supabase persistence, logging, basic recommendations/comparisons, exercise substitutions, and public deployment remain core. Start with a small curated exercise library. Postpone advanced charts, countdown timers, and extensive filtering. Stage 1 delivers only the runnable frontend shell and verification setup; it does not provision services, implement authentication, or publish a site.
+Stage 1 is complete. Stage 2 (database setup, authentication, and security) is now authorized; stop if credentials or authorization are needed. Stage 3 is not authorized. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Secure authentication, Supabase persistence, logging, basic recommendations/comparisons, exercise substitutions, and public deployment remain core. Start with a small curated exercise library. Postpone advanced charts, countdown timers, and extensive filtering. Stage 1 delivers only the runnable frontend shell and verification setup; it does not provision services, implement authentication, or publish a site.
+
+## 14. Persistent frontend design requirements
+
+These requirements apply to future frontend work, including authentication screens. They do not authorize an unrelated redesign or expand a development stage.
+
+- Create a distinctive, context-specific fitness experience rather than a generic dashboard or interchangeable card template. The working direction is a training journal, with expressive typography and purposeful visual hierarchy; this direction can evolve within the requirements below.
+- Typography: choose beautiful, distinctive, readable typefaces. Avoid Inter, Arial, Roboto, generic system-font-led designs, and defaulting to Space Grotesk. Choose fonts intentionally for this project; retain practical fallback fonts. The Stage 1 shell's Inter/system stack is existing work to revisit during an authorized frontend design pass.
+- Color: commit to a cohesive palette with dominant colors and sharp accents. Define reusable CSS variables. IDE themes and cultural aesthetics may inform the palette. Avoid clichéd purple gradients on white and timid, evenly distributed color schemes.
+- Layout: use proportions, spacing, and composition that reflect training and personal recordkeeping. Avoid predictable, repeated component patterns and cookie-cutter layouts. Keep workout entry clear and efficient on mobile.
+- Backgrounds: build atmosphere and depth through layered gradients, geometric patterns, or contextual treatments instead of relying on flat fills everywhere. Preserve text contrast and readability.
+- Motion: favor a small number of deliberate moments, such as a coordinated page-load reveal with staggered delays. Prefer CSS animations for simple effects; use a React motion library only when available and justified. Respect `prefers-reduced-motion`, and keep essential content visible when animation is disabled.
+- Accessibility and function remain acceptance requirements: readable text, contrast, keyboard focus, responsive layout, and reliable forms take priority over decorative effects.
+- Do not treat visual polish as permission to implement postponed charts, countdown timers, extensive filtering, or a large exercise library.
+
+## 15. Stage 2 access checkpoint
+
+Initial inspection found no exposed Supabase connector, installed Supabase CLI, or configured Supabase access token. Stage 2 cannot yet apply migrations or verify real authentication and database isolation. Stop at this account-access checkpoint per the user's instruction; do not claim Stage 2 complete. Follow `docs/SUPABASE_SETUP.md` to supply project configuration and select an authorized migration workflow. Never print credential values or commit local environment files. Stage 3 remains unapproved.
