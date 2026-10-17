@@ -1,6 +1,6 @@
 # Fitness App — MVP specification
 
-Status: proposed; awaiting approval before implementation or dependency installation.
+Status: architecture approved; Stage 1 authorized and implemented. Stage 2 and later require separate approval.
 Prepared: 2026-10-17.
 
 ## 1. Project inspection
@@ -81,7 +81,7 @@ Rules are product heuristics informed by evidence, not a validated clinical algo
 - Cover major muscle groups with squat/knee-dominant, hinge, push, pull, and trunk movements across the week. Template coverage and weekly set counts will be auditable.
 - Initial product defaults: beginners generally 1–2 working sets at 8–12 reps; experienced strength options generally 2–3 sets at 4–8 reps for main lifts; muscle-growth options generally 2–3 sets at 8–12 reps. These are adjustable starting presets, not claims that these ranges are uniquely effective. Do not require 1RM testing or training to failure.
 - ACSM's heavier-loading guidance informs experienced strength options; higher weekly volume informs muscle-growth options. Beginner routines start below higher-volume targets and offer gradual adjustments. Do not present an approximate weekly-set target as mandatory for every person.
-- Rest presets: approximately 2–3 minutes for demanding compound sets and 1–2 minutes for simpler accessories, with longer rest allowed when needed. These are editable app defaults, not a universal optimum or a specific finding attributed to the 2026 stand. Provide optional rest countdown and a reminder to recover enough for controlled technique.
+- Rest presets: approximately 2–3 minutes for demanding compound sets and 1–2 minutes for simpler accessories, with longer rest allowed when needed. These are editable app defaults, not a universal optimum or a specific finding attributed to the 2026 stand. Provide a reminder to recover enough for controlled technique. Countdown timers are postponed.
 - Progression suggestion: when all prescribed working sets reach the top of the rep range with controlled technique on two completed exposures, offer a small user-chosen load increase. This is a conservative app heuristic; never automatically increase logged weights or promise adaptation. Allow users to keep or lower load.
 - Substitutions use curated shared movement patterns and muscle involvement, filtered by available equipment. Explain differences in stability, range of motion, unilateral/bilateral loading, equipment, and skill as applicable. Example: dumbbell bench press and machine chest press share horizontal pushing and chest/triceps involvement, but differ in stabilization and movement path. Do not transfer weights or merge their progress records. Catalog exercises must have at least one documented alternative; unavailable-equipment alternatives remain viewable with their requirement clearly labeled.
 - Present guidance as general information for healthy adults; do not generate injury-specific substitutions. Encourage users with pain or relevant medical limitations to seek qualified individual guidance.
@@ -109,7 +109,7 @@ Mobile-first logger, visible save/error states, retries without duplicate sessio
 | 2 — `feat: add Supabase schema and authentication` | Migrations, seeds, RLS, login/recovery/profile | Clean database migration; two-user/anonymous security matrix; verified auth flows |
 | 3 — `feat: recommend and customize routines` | Onboarding, versioned templates/rules, routine CRUD | Goal/day/equipment rule tests, copy/edit persistence, no cross-account writes |
 | 4 — `feat: log workouts and substitutions` | Drafts, individual sets, atomic completion, rest UI, alternatives | Reload persistence; failed-save/retry test; routine edits preserve history; substitute load reset |
-| 5 — `feat: show workout comparisons and trends` | History, comparisons, charts/tables, source page | Known-fixture calculation tests, mixed-unit conversion, bodyweight, missing history, zero baseline |
+| 5 — `feat: show workout comparisons and trends` | History, basic comparison tables, source page; advanced charts postponed | Known-fixture calculation tests, mixed-unit conversion, bodyweight, missing history, zero baseline |
 | 6 — `chore: verify and publish MVP` | Public deployment, production config, setup/runbook | Full critical-flow E2E, production email callbacks, RLS checks, public HTTPS smoke test |
 
 After approval, create the planning commit first, then focused implementation commits after each passing gate. Do not commit credentials. Use a CI workflow if a suitable remote is available; local automated commands remain required. Stage completion requires working behavior, not placeholder screens.
@@ -120,7 +120,7 @@ After approval, create the planning commit first, then focused implementation co
 - Verified user completes onboarding, receives explained feasible options, and selects or creates a routine.
 - Routine edits and workout logs survive refresh, logout/login, and another authenticated browser session through Supabase PostgreSQL.
 - Log multiple exercises and sets with reps and kg/lb inputs; edit/delete own records; save and resume a draft; complete without duplicate records on retry.
-- Compare at least two completed workouts accurately using the documented metrics; chart/table data agree; substitutions keep separate histories.
+- Compare at least two completed workouts accurately using the documented metrics; displayed comparison values agree with saved records; substitutions keep separate histories.
 - Every catalog exercise has an explained replacement and editable rest guidance.
 - Sources, app assumptions, and timeline limitations are visible in the application.
 - Automated build, typecheck, rule/calculation tests, RLS integration tests, and critical browser flows pass. Any infrastructure-limited verification is explicitly reported, not claimed as passed.
@@ -137,6 +137,10 @@ Sources checked 2026-10-17. Source mapping will be carried into the in-app metho
 
 ## 12. Approval and external setup dependencies
 
-Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. After approval, implementation can proceed in the stages above.
+Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. The architecture and Stage 1 were approved. Stop after Stage 1; each subsequent stage requires explicit approval.
 
 A real deployment requires access to a user-owned Supabase project (project URL, publishable key, and an approved secure path for migrations), production email configuration, and Sites hosting permissions. No connected Supabase provisioning tool is currently exposed. Verify the available CLI/dashboard authentication after approval; if unavailable, prepare migrations and exact setup steps and request the minimum required connection. Never ask for secret keys in chat. Service costs and plan limits must be checked before any paid provisioning; no paid resource purchase is included in plan approval. Public hosting exposes the app's entry pages, while individual workout records remain private.
+
+## 13. Approved implementation priorities
+
+Stage 1 only is authorized for the current implementation. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Secure authentication, Supabase persistence, logging, basic recommendations/comparisons, exercise substitutions, and public deployment remain core. Start with a small curated exercise library. Postpone advanced charts, countdown timers, and extensive filtering. Stage 1 delivers only the runnable frontend shell and verification setup; it does not provision services, implement authentication, or publish a site.
