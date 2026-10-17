@@ -2,6 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ProfileDraft } from '../profile/profile'
 import type { Exercise, RoutineDocument, SavedRoutine } from './types'
 
+function editableAssumptions(value: Record<string, unknown> | null) {
+  // Retry receipts are server bookkeeping, not editable recommendation inputs.
+  return Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => !['_save_receipts', '_save_request_id', '_save_payload_hash'].includes(key)))
+}
+
 const failure = 'Unable to load routines. Check your connection and database setup, then retry.'
 export async function loadWorkspace(client: SupabaseClient, userId: string): Promise<{ profile: ProfileDraft | null; catalog: Exercise[]; routines: SavedRoutine[] }> {
   const results = await Promise.all([
@@ -17,7 +22,7 @@ export async function loadWorkspace(client: SupabaseClient, userId: string): Pro
       id: row.id, updated_at: row.updated_at, archived_at: row.archived_at,
       document: {
         name: row.name, goal: row.goal, origin_template_key: row.origin_template_key,
-        recommendation_version: row.recommendation_version, assumptions: row.assumptions ?? {},
+        recommendation_version: row.recommendation_version, assumptions: editableAssumptions(row.assumptions),
         days: [...row.routine_days].sort((a, b) => a.position - b.position).map(day => ({
           name: day.name, weekday: day.weekday,
           exercises: [...day.routine_exercises].sort((a, b) => a.position - b.position).map(item => ({

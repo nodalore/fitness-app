@@ -82,3 +82,9 @@ The MVP prioritizes secure accounts, persistence, workout logging, basic recomme
 ## Routine planning
 
 Sign in and open **Routines** or use the link from Profile. Review suggestions, select **Customize & save**, or select **Create a routine**. The editor supports workout days, exercise order, sets, rep ranges, rest, and notes. Archive preserves the plan and future history. [docs/STAGE_3.md](docs/STAGE_3.md) explains the rules, limitations, SQL approval step, and live persistence checks. No paid AI service or new frontend dependency is used.
+
+## Final routine-save migration review
+
+Before applying migration 003, read [docs/ROUTINE_SAVE_REVIEW.md](docs/ROUTINE_SAVE_REVIEW.md). The final SQL tightens input validation, retains older retry receipts, fingerprints the edit precondition, and fixes routine timestamp conflict tokens. It adds the save RPC **and replaces the existing timestamp helper** without changing tables or RLS policies. No hosted changes have been made by the agent.
+
+`npm run test:db:concurrency` adds six real multi-connection tests using development-only embedded PostgreSQL. Its disposable data, temporary files, and Unix socket stay inside this project's ignored `.test-postgres/` directory. It never reads Supabase credentials; `npm run check` remains the portable frontend/in-memory database verification command.

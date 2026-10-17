@@ -18,13 +18,14 @@ test.each([
 
 test('workspace reads fresh owner-filtered records and orders nested prescriptions', async () => {
   const profileEq = vi.fn().mockReturnValue({ maybeSingle: async () => ({ data: testProfile, error: null }) })
-  const routineOrder = vi.fn().mockResolvedValue({ data: [{ id: 'saved', updated_at: 'stamp', archived_at: null, ...testDocument, routine_days: [{ name: 'Day', weekday: 1, position: 0, routine_exercises: [...testDocument.days[0].exercises].map(item => ({ ...item, position: 0 })) }] }], error: null })
+  const routineOrder = vi.fn().mockResolvedValue({ data: [{ id: 'saved', updated_at: 'stamp', archived_at: null, ...testDocument, assumptions: { origin: 'custom', _save_receipts: { internal: 'hash' }, _save_request_id: 'old', _save_payload_hash: 'old' }, routine_days: [{ name: 'Day', weekday: 1, position: 0, routine_exercises: [...testDocument.days[0].exercises].map(item => ({ ...item, position: 0 })) }] }], error: null })
   const routineEq = vi.fn().mockReturnValue({ order: routineOrder })
   const from = vi.fn((table: string) => ({ select: () => table === 'profiles' ? { eq: profileEq } : table === 'exercises' ? { is: () => ({ order: async () => ({ data: testCatalog, error: null }) }) } : { eq: routineEq } }))
   const result = await loadWorkspace({ from } as unknown as SupabaseClient, 'owner-a')
   expect(profileEq).toHaveBeenCalledWith('user_id', 'owner-a')
   expect(routineEq).toHaveBeenCalledWith('user_id', 'owner-a')
   expect(result.routines[0].document.days[0].exercises[0].rest_seconds).toBe(120)
+  expect(result.routines[0].document.assumptions).toEqual({ origin: 'custom' })
 })
 
 test('archive filters by owner, ID, version, and active state before confirming success', async () => {

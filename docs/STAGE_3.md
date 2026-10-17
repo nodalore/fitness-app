@@ -45,7 +45,7 @@ The function:
 - Uses `SECURITY INVOKER`, an empty search path, explicit schema references, and the caller's `auth.uid()`. RLS remains enabled and unchanged. It never accepts an owner ID from the browser.
 - Is executable only by `authenticated`; anonymous execution is revoked.
 - Validates a maximum of seven days, 20 exercises per day, 1–10 sets, 1–100 reps, and 1–900 rest seconds. These are application input bounds, not exercise prescriptions. Existing table constraints additionally validate names, notes, rep ordering, weekday values, and exercise references.
-- Uses a retry token stored in routine assumptions with a payload hash, plus a per-user transaction lock. An identical retry returns the original result; reusing the token with a changed document is rejected.
+- Retains per-request receipts in routine assumptions across later edits, plus a per-user transaction lock. A SHA-256 fingerprint covers the normalized document, routine ID, and expected edit version. An identical retry acknowledges the original result without rewriting later changes; reusing the token with changed inputs is rejected. Client-supplied retry bookkeeping is ignored.
 - Requires the last loaded `updated_at` timestamp for existing-routine edits. Conflicting edits fail with a reload message instead of silently overwriting.
 - Keeps original days and workout references intact when sessions already reference a routine. Editing creates a new active version and archives the old version atomically. Without historical sessions, it replaces the existing prescription within the same transaction.
 
@@ -53,7 +53,7 @@ Archiving is a single ordinary RLS-protected update with owner, routine ID, acti
 
 ## Required review and approval — no live SQL executed
 
-Review `supabase/migrations/202610170003_routine_save.sql`. It adds **one function and its execute grants**. It does not alter tables, relax policies, disable RLS, or change existing data. It is nonetheless a hosted schema addition, so it has not been applied without your approval.
+Review `supabase/migrations/202610170003_routine_save.sql`. It adds **the save RPC and its execute grants**, and replaces the existing timestamp helper so routine edit tokens strictly advance while profile timestamp behavior stays unchanged. The existing trigger definitions are retained. See [the final review](ROUTINE_SAVE_REVIEW.md) for the exact fixes and scope. It does not alter tables, relax policies, disable RLS, or change existing data. It is nonetheless a hosted schema addition, so it has not been applied without your approval.
 
 Once you approve it, open the Fitness App project in Supabase SQL Editor, paste the entire file, and run it once. Keep `begin` and `commit`. Do not rerun the first two migrations, which are already installed. If an error occurs, stop and share only the error text; use `rollback;` if a failed transaction is left open.
 
@@ -64,12 +64,13 @@ Until the function is installed, recommendations, the editor, and reading saved 
 ```sh
 npm run check
 npm run test:db
+npm run test:db:concurrency
 npm run check:security:live
 ```
 
-`check` includes frontend tests, all migration/security tests, TypeScript, and production build. `test:db` uses isolated in-memory PostgreSQL only. `check:security:live` performs only anonymous GET requests against the configured hosted project, prints status/count summaries, and never prints keys, response bodies, or personal records.
+`check` includes frontend tests, all migration/security tests, TypeScript, and production build. `test:db` uses isolated in-memory PostgreSQL only. `test:db:concurrency` uses disposable native local PostgreSQL to test overlapping connections without reading Supabase configuration; host permission to start a local process/socket may be needed. `check:security:live` performs only anonymous GET requests against the configured hosted project, prints status/count summaries, and never prints keys, response bodies, or personal records.
 
-Final verification: 169 tests passed across 12 files, including 75 isolated PostgreSQL tests; TypeScript checking and the production build passed. No new dependencies were needed for Stage 3.
+Final migration review: 216 tests passed across 12 files, including 122 isolated PostgreSQL tests; TypeScript checking and production build passed. Six real multi-connection PostgreSQL scenarios also passed. A development-only embedded-postgres dependency was added for contention testing; see [ROUTINE_SAVE_REVIEW.md](ROUTINE_SAVE_REVIEW.md).
 
 Automated coverage includes all goals and experience levels; all 127 nonempty weekday combinations; equipment gaps and deprecated exercises; stable recommendation results; timeline invariance; custom editor validation; selection/create/edit/archive UI; failed saves and retry token reuse; account-switch state clearing; fresh reload reads; RPC transaction rollback, conflicting edits, anonymous/cross-user denial, and history-preserving versioning. Recommendations generated from the actual seed are saved through the exact RPC in local PostgreSQL. A committed local routine remains readable by its owner and invisible to the other role after identity changes.
 

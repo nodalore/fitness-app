@@ -276,6 +276,207 @@ test('the hosted routine-RPC verification script runs with exact migration seman
   await db.exec(sql)
 })
 
+test('review regression: later edits retain earlier retry receipts without reverting the plan', async () => {
+  await asUser(A, async () => {
+    await rpc()
+    const stamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [freshId])).rows[0].stamp
+    await rpc(freshId, { ...document, name: 'Later edit' }, C, stamp)
+    expect(await rpc()).toBe(freshId)
+    expect((await db.query<{ name: string }>('select name from public.routines where id=$1', [freshId])).rows[0].name).toBe('Later edit')
+  })
+})
+
+test('review regression: routine version timestamps advance within the same transaction', async () => {
+  await asUser(A, async () => {
+    await rpc()
+    const before = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [freshId])).rows[0].stamp
+    await rpc(freshId, { ...document, name: 'First edit' }, C, before)
+    const after = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [freshId])).rows[0].stamp
+    expect(after).not.toBe(before)
+    await expect(rpc(freshId, { ...document, name: 'Stale second editor' }, B, before)).rejects.toThrow(/Routine changed/)
+  })
+})
+
+test('review regression: non-string names cannot be coerced into routine names', async () => {
+  await expect(asUser(A, () => rpc(freshId, { ...document, name: { unexpected: 'object' } }))).rejects.toThrow()
+})
+
+test('review regression: numeric strings cannot masquerade as prescription numbers', async () => {
+  const invalid = structuredClone(document)
+  const item = { ...invalid.days[0].exercises[0], target_sets: '2' }
+  await expect(asUser(A, () => rpc(freshId, { ...invalid, days: [{ ...invalid.days[0], exercises: [item] }] }))).rejects.toThrow()
+})
+
+
+test.each([
+  ['missing name', { ...document, name: undefined }],
+  ['null name', { ...document, name: null }],
+  ['whitespace name', { ...document, name: '\t\n' }],
+  ['bad goal', { ...document, goal: 'unknown' }],
+  ['non-array days', { ...document, days: {} }],
+  ['null day', { ...document, days: [null] }],
+  ['non-string day name', { ...document, days: [{ ...document.days[0], name: 1 }] }],
+  ['fractional weekday', { ...document, days: [{ ...document.days[0], weekday: 1.5 }] }],
+  ['string weekday', { ...document, days: [{ ...document.days[0], weekday: '1' }] }],
+  ['out-of-range weekday', { ...document, days: [{ ...document.days[0], weekday: 7 }] }],
+  ['non-object assumptions', { ...document, assumptions: [] }],
+  ['forged owner field', { ...document, user_id: B }],
+  ['non-string template key', { ...document, origin_template_key: {} }],
+  ['oversized version', { ...document, recommendation_version: 'v'.repeat(101) }],
+])('strict RPC validation rejects %s', async (_name, input) => {
+  // Runs against an isolated transaction, never the hosted database.
+  await expect(asUser(C, () => rpc(freshId, input))).rejects.toMatchObject({ code: '22023' })
+})
+
+test.each([
+  ['null prescription', null],
+  ['invalid exercise UUID', { ...document.days[0].exercises[0], exercise_id: 'not-a-uuid' }],
+  ['null sets', { ...document.days[0].exercises[0], target_sets: null }],
+  ['fractional sets', { ...document.days[0].exercises[0], target_sets: 2.5 }],
+  ['oversized sets', { ...document.days[0].exercises[0], target_sets: 11 }],
+  ['negative min reps', { ...document.days[0].exercises[0], rep_min: -1 }],
+  ['null max reps', { ...document.days[0].exercises[0], rep_max: null }],
+  ['fractional rest', { ...document.days[0].exercises[0], rest_seconds: 120.5 }],
+  ['oversized rest', { ...document.days[0].exercises[0], rest_seconds: 901 }],
+  ['inverted reps', { ...document.days[0].exercises[0], rep_min: 15, rep_max: 8 }],
+  ['non-string notes', { ...document.days[0].exercises[0], notes: {} }],
+  ['oversized notes', { ...document.days[0].exercises[0], notes: 'x'.repeat(2001) }],
+  ['unknown exercise fields', { ...document.days[0].exercises[0], user_id: B }],
+])('strict RPC prescription validation rejects %s', async (_name, input) => {
+  const value = { ...document, days: [{ ...document.days[0], exercises: [input] }] }
+  await expect(asUser(C, () => rpc(freshId, value))).rejects.toMatchObject({ code: '22023' })
+})
+
+test('integral JSON numbers with decimal notation are valid, while unknown exercise IDs roll back', async () => {
+  await asUser(C, async () => {
+    const rawJson = JSON.stringify(document).replace('\"weekday\":1', '\"weekday\":1.0').replace('\"target_sets\":2', '\"target_sets\":2.0')
+    const saved = await db.query<{ id: string }>('select public.fitness_save_routine($1,$2::jsonb,$3,null) as id', [freshId, rawJson, requestId])
+    expect(saved.rows[0].id).toBe(freshId)
+  })
+  await expect(asUser(C, () => rpc(freshId, { ...document, days: [{ ...document.days[0], exercises: [{ ...document.days[0].exercises[0], exercise_id: C }] }] }))).rejects.toMatchObject({ code: '22023' })
+})
+
+test('null auth.uid is rejected even under the authenticated role', async () => {
+  await db.exec('begin; set local role authenticated')
+  try {
+    await db.query("select set_config('request.jwt.claim.sub','',true)")
+    await expect(rpc()).rejects.toMatchObject({ code: '42501' })
+  } finally { await db.exec('rollback') }
+})
+
+test('request tokens are per-user and input cannot forge retry receipts', async () => {
+  await asUser(C, async () => {
+    const input = { ...document, assumptions: { _save_receipts: { forged: 'fake' }, _save_request_id: 'forged', origin: 'custom' } }
+    await rpc(C, input)
+    const { rows } = await db.query<{ assumptions: Record<string, unknown> }>('select assumptions from public.routines where id=$1', [C])
+    expect(rows[0].assumptions._save_request_id).toBeUndefined()
+    expect(rows[0].assumptions._save_receipts).not.toHaveProperty('forged')
+    expect(rows[0].assumptions._save_receipts).toHaveProperty(requestId)
+    expect(rows[0].assumptions.origin).toBe('custom')
+  })
+  await asUser(A, async () => {
+    expect(await rpc()).toBe(freshId)
+    await db.query("select set_config('request.jwt.claim.sub',$1,true)", [B])
+    expect(await rpc(C)).toBe(C) // Same request UUID, independent owner's operation.
+  })
+})
+
+test('a retry with a different edit precondition is rejected', async () => {
+  await asUser(C, async () => {
+    await rpc()
+    await expect(rpc(freshId, document, requestId, '2000-01-01T00:00:00Z')).rejects.toMatchObject({ code: '22023' })
+  })
+})
+
+test('historical versioning preserves completed session snapshots, sets, and original prescriptions', async () => {
+  const stamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [A])).rows[0].stamp
+  await asUser(A, async () => {
+    await db.query("update public.workout_sessions set status='completed',completed_at=started_at,routine_name_snapshot='Original snapshot' where id=$1", [A])
+    const originals = (await db.query<{ routine_day_id: string }>('select * from public.routine_exercises where user_id=$1', [A])).rows
+    const sessions = (await db.query('select * from public.workout_sessions where user_id=$1', [A])).rows
+    const sets = (await db.query('select * from public.workout_sets where user_id=$1', [A])).rows
+    const newId = await rpc(A, { ...document, name: 'Updated version' }, C, stamp)
+    expect(newId).not.toBe(A)
+    expect((await db.query('select * from public.routine_exercises where routine_day_id=$1', [A])).rows).toEqual(originals.filter(row => row.routine_day_id === A))
+    expect((await db.query('select * from public.workout_sessions where user_id=$1', [A])).rows).toEqual(sessions)
+    expect((await db.query('select * from public.workout_sets where user_id=$1', [A])).rows).toEqual(sets)
+    // Edit the new active version, then retry the original version-creation request.
+    const nextStamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [newId])).rows[0].stamp
+    await rpc(newId, { ...document, name: 'Subsequent edit' }, B, nextStamp)
+    expect(await rpc(A, { ...document, name: 'Updated version' }, C, stamp)).toBe(newId)
+    expect((await db.query<{ name: string }>('select name from public.routines where id=$1', [newId])).rows[0].name).toBe('Subsequent edit')
+  })
+})
+
+test('a failed history-preserving version save rolls back archival and new records', async () => {
+  const stamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [A])).rows[0].stamp
+  await asUser(A, async () => {
+    await db.exec('savepoint invalid_version')
+    await expect(rpc(A, { ...document, days: [{ ...document.days[0], exercises: [{ ...document.days[0].exercises[0], exercise_id: C }] }] }, requestId, stamp)).rejects.toThrow(/available exercise/)
+    await db.exec('rollback to savepoint invalid_version')
+    expect((await db.query<{ archived_at: string | null }>('select archived_at from public.routines where id=$1', [A])).rows[0].archived_at).toBeNull()
+    expect((await db.query('select * from public.routine_days where id=$1', [A])).rows).toHaveLength(1)
+  })
+})
+
+test('archived routines reject new edits but acknowledge old successful requests without unarchiving', async () => {
+  await asUser(C, async () => {
+    await rpc(C)
+    await db.query('update public.routines set archived_at=now() where id=$1', [C])
+    expect(await rpc(C)).toBe(C)
+    const stamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [C])).rows[0].stamp
+    await db.exec('savepoint archived_edit')
+    await expect(rpc(C, document, B, stamp)).rejects.toThrow(/Archived routines/)
+    await db.exec('rollback to savepoint archived_edit')
+    expect((await db.query<{ archived_at: string }>('select archived_at from public.routines where id=$1', [C])).rows[0].archived_at).not.toBeNull()
+  })
+})
+
+test('document and day/exercise count limits are enforced', async () => {
+  for (const value of [
+    { ...document, assumptions: { large: 'x'.repeat(2097152) } },
+    { ...document, days: Array.from({ length: 8 }, () => document.days[0]) },
+    { ...document, days: [{ ...document.days[0], exercises: Array.from({ length: 21 }, () => document.days[0].exercises[0]) }] },
+  ]) await expect(asUser(C, () => rpc(C, value))).rejects.toMatchObject({ code: '22023' })
+})
+
+test('successful retries remain valid after catalog deprecation', async () => {
+  await db.exec('begin; set local role authenticated')
+  try {
+    await db.query("select set_config('request.jwt.claim.sub',$1,true)", [C])
+    await rpc(C)
+    await db.exec('reset role')
+    await db.query('update public.exercises set deprecated_at=now() where id=$1', [exercise])
+    await db.exec('set local role authenticated')
+    expect(await rpc(C)).toBe(C)
+    const expected = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [C])).rows[0].stamp
+    await expect(rpc(C, document, B, expected)).rejects.toThrow(/available exercise/)
+  } finally { await db.exec('rollback') }
+})
+
+test('failed writes do not consume a retry token or erase existing receipts', async () => {
+  await asUser(C, async () => {
+    await rpc(C)
+    const expected = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [C])).rows[0].stamp
+    const invalid = { ...document, days: [{ ...document.days[0], exercises: [{ ...document.days[0].exercises[0], exercise_id: C }] }] }
+    await db.exec('savepoint failed_edit')
+    await expect(rpc(C, invalid, B, expected)).rejects.toThrow(/available exercise/)
+    await db.exec('rollback to savepoint failed_edit')
+    expect(await rpc(C, { ...document, name: 'Fixed edit' }, B, expected)).toBe(C)
+    expect(await rpc(C)).toBe(C)
+  })
+})
+
+test.each([null, [], true, 42, 'not an object'])('RPC rejects a non-object document: %j', async value => {
+  await expect(asUser(C, () => rpc(C, value))).rejects.toMatchObject({ code: '22023' })
+})
+
+test('RPC rejects null IDs and nonfinite edit versions before writing', async () => {
+  await expect(asUser(C, () => db.query('select public.fitness_save_routine(null,$1::jsonb,$2,null)', [JSON.stringify(document), requestId]))).rejects.toMatchObject({ code: '22023' })
+  await expect(asUser(C, () => db.query('select public.fitness_save_routine($1,$2::jsonb,null,null)', [C, JSON.stringify(document)]))).rejects.toMatchObject({ code: '22023' })
+  await expect(asUser(C, () => rpc(C, document, requestId, 'infinity'))).rejects.toMatchObject({ code: '22023' })
+})
+
 test('committed routine data survives identity changes and a fresh database read', async () => {
   // No live credentials: the local PostgreSQL roles emulate independent client requests.
   await db.exec('begin; set local role authenticated;')
