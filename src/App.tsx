@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router'
+import { supabaseConfiguration } from './lib/supabase'
 
 function Home() {
   return <>
@@ -17,7 +18,7 @@ function Home() {
         <article><span className="number">03 / REFLECT</span><h3>Compare your workouts</h3><p>Look back at previous sessions and compare the same exercise over time.</p></article>
       </div>
     </section>
-    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>This is the Stage 1 preview. Accounts, routine recommendations, and workout saving will arrive in later stages. No workout data is collected here.</p></aside>
+    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>Stage 2 connection setup is underway. Accounts and workout saving are not available yet. No workout data is collected here.</p><p role="status">{supabaseConfiguration.ready ? 'Supabase configuration loaded. The live connection has not been verified yet.' : supabaseConfiguration.message}</p></aside>
   </>
 }
 
@@ -57,6 +58,6 @@ export default function App() {
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="header"><Link className="brand" to="/" aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true">F</span> Fitness App</Link><nav aria-label="Main navigation"><NavLink to="/" end>Home</NavLink><NavLink to="/about">Our approach</NavLink></nav></header>
     <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="*" element={<NotFound />} /></Routes></main>
-    <footer><span>Fitness App</span><span>Stage 1 · Frontend preview</span></footer>
+    <footer><span>Fitness App</span><span>Stage 2 · Connection setup</span></footer>
   </div>
 }

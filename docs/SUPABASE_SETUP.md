@@ -1,6 +1,6 @@
 # Stage 2: Supabase account setup
 
-Status: Stage 2 authorized; stopped at the account-access checkpoint. No Supabase project has been created or changed, no SQL migrations have been applied, and no authentication implementation has been added yet.
+Status: the user has created a Supabase project. The SDK and client configuration are implemented locally, and a blank Git-ignored `.env.local` is available. The agent has not connected to or changed the live project. SQL migrations and authentication implementation are still pending.
 
 ## 1. Create or choose a project
 
@@ -10,14 +10,14 @@ A dedicated development project lets us test security without affecting producti
 
 ## 2. Configure the frontend's public project values
 
-In the project's Connect panel, find the project URL and publishable API key. Copy `.env.example` to `.env.local` inside `~/fitness-app` and fill in:
+In the project's Connect panel, find the project URL and publishable API key. Open the existing `.env.local` inside `~/fitness-app` and fill in (or copy `.env.example` if it is absent):
 
 ```dotenv
 VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-These are browser configuration, not administrative credentials. `.env.local` is ignored by Git. Never place a service-role key, secret API key, database password, or Supabase personal access token in a `VITE_` variable. No application changes use these values until implementation resumes. Restart Vite after future environment changes.
+These are browser configuration, not administrative credentials. `.env.local` is ignored by Git. Never place a service-role key, secret API key, database password, or Supabase personal access token in a `VITE_` variable. The frontend reads these values now and displays configuration status. Restart Vite after changing them. Configuration-loaded status is not a live connection test. The client is created lazily when an authenticated feature needs it.
 
 ## 3. Choose how database migrations will be applied
 
@@ -68,3 +68,7 @@ Do not send test account passwords in chat. The agent will agree on local test c
 - Database security: https://supabase.com/docs/guides/database/postgres/row-level-security
 
 Documentation checked 2026-10-17. Dashboard labels can change; use the linked official pages if settings move.
+
+## Current handoff
+
+After entering the public values locally, tell the agent they are ready; do not paste the file contents in chat. Confirm whether the project is empty and choose the dashboard SQL workflow or authorize a connected integration. Preparing local code and migration files is within Stage 2 authorization; running SQL against your project, changing account settings, or making live test-user/data changes must wait for the appropriate access and authorization.
