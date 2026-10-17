@@ -15,6 +15,16 @@ export const defaultProfile: ProfileDraft = {
   timeline_weeks: 8, equipment: ['bodyweight'], display_unit: 'kg', timezone: 'UTC',
 }
 
+// Use the browser's IANA timezone; UTC keeps profile saving available if
+// detection is unavailable. Persist this value for future date/week grouping.
+export function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
 export function validateProfile(profile: ProfileDraft): string | null {
   if (profile.display_name.trim().length > 80) return 'Keep your name to 80 characters or fewer.'
   if (!['general_fitness', 'strength', 'muscle_growth'].includes(profile.goal)) return 'Choose a valid goal.'
@@ -26,6 +36,6 @@ export function validateProfile(profile: ProfileDraft): string | null {
   try {
     if (!profile.timezone || profile.timezone.length > 100) throw new Error()
     new Intl.DateTimeFormat('en', { timeZone: profile.timezone }).format()
-  } catch { return 'Enter a valid timezone, such as America/New_York or UTC.' }
+  } catch { return 'Unable to determine your timezone. Please reload and try again.' }
   return null
 }

@@ -91,6 +91,7 @@ Rules are product heuristics informed by evidence, not a validated clinical algo
 - Compare the same exercise ID and loading convention across completed sessions, excluding warmups and incomplete sets. Display previous/current working sets, reps, and load, with absolute changes.
 - Volume-load = sum of completed working-set reps × external load in kg. Label this as workload, not a direct measure of muscle growth or proof of increased strength. Show sets/reps without invented tonnage for bodyweight exercises.
 - Show load at matched reps and reps at matched load when comparable; otherwise show both records and explain the changed conditions. Additional sets may increase workload without demonstrating improved performance.
+- Detect timezone automatically using `Intl.DateTimeFormat().resolvedOptions().timeZone` when saving profiles; fall back to UTC if unavailable. Do not ask users to enter a timezone. Keep `profiles.timezone` and use the saved zone explicitly for workout date display and weekly boundaries when those features are implemented. No schema change is required.
 - Trends: per-exercise load and rep history, per-session comparable volume-load, and completed sessions per week in the user's timezone. First session shows an empty comparison state; zero baseline has no percentage change; decreases are displayed honestly.
 - A replacement exercise starts its own trend. No estimated 1RM, calorie estimates, or predicted physique outcomes in MVP.
 

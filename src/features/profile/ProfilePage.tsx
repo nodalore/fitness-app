@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router'
 import { useAuth } from '../auth/AuthProvider'
-import { defaultProfile, equipmentOptions, validateProfile, weekdays, type ProfileDraft } from './profile'
+import { defaultProfile, detectTimezone, equipmentOptions, validateProfile, weekdays, type ProfileDraft } from './profile'
 
 export function ProfilePage() {
   const { session, loading, error, client } = useAuth()
@@ -28,7 +28,7 @@ function ProfileForm({ userId }: { userId: string }) {
     void client.from('profiles').select('display_name,goal,experience,available_weekdays,timeline_weeks,equipment,display_unit,timezone').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
       if (cancelled) return
       if (error) setLoadError('Unable to load your profile. Check your connection and confirm the reviewed SQL migrations have been applied.')
-      else setProfile(data ?? { ...defaultProfile, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      else setProfile(data ?? { ...defaultProfile, timezone: detectTimezone() })
       setLoading(false)
     }, () => {
       if (!cancelled) { setLoadError('Unable to load your profile. Check your connection and retry.'); setLoading(false) }
@@ -39,11 +39,13 @@ function ProfileForm({ userId }: { userId: string }) {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!client || busy) return
-    const validation = validateProfile(profile)
+    // Refresh on every save, including existing profiles and browser zone changes.
+    const profileToSave = { ...profile, timezone: detectTimezone() }
+    const validation = validateProfile(profileToSave)
     if (validation) { setMessage(validation); return }
     setBusy(true); setMessage('')
     try {
-      const { data, error } = await client.from('profiles').upsert({ ...profile, display_name: profile.display_name.trim(), user_id: userId }, { onConflict: 'user_id' }).select('user_id').single()
+      const { data, error } = await client.from('profiles').upsert({ ...profileToSave, display_name: profile.display_name.trim(), user_id: userId }, { onConflict: 'user_id' }).select('user_id').single()
       setMessage(error || !data ? 'Profile was not saved. Check your connection and database setup, then retry.' : 'Profile saved to Supabase.')
     } catch { setMessage('Profile was not saved. Check your connection and retry.') }
     finally { setBusy(false) }
@@ -55,7 +57,6 @@ function ProfileForm({ userId }: { userId: string }) {
     <fieldset><legend>Available workout days</legend><div className="choice-grid">{weekdays.map((day, index) => <label key={day}><input type="checkbox" checked={profile.available_weekdays.includes(index)} onChange={() => setProfile({ ...profile, available_weekdays: toggle(profile.available_weekdays, index) })} />{day}</label>)}</div></fieldset>
     <fieldset><legend>Available equipment</legend><div className="choice-grid">{equipmentOptions.map(item => <label key={item}><input type="checkbox" checked={profile.equipment.includes(item)} onChange={() => setProfile({ ...profile, equipment: toggle(profile.equipment, item) })} />{item}</label>)}</div></fieldset>
     <div className="form-columns"><label>Review timeline (weeks)<input type="number" min={1} max={52} required value={profile.timeline_weeks} onChange={e => setProfile({ ...profile, timeline_weeks: Number(e.target.value) })} /></label><label>Weight units<select value={profile.display_unit} onChange={e => setProfile({ ...profile, display_unit: e.target.value })}><option value="kg">Kilograms (kg)</option><option value="lb">Pounds (lb)</option></select></label></div><p className="field-note">A review point, not a deadline for guaranteed results.</p>
-    <label>Timezone<input required maxLength={100} value={profile.timezone} onChange={e => setProfile({ ...profile, timezone: e.target.value })} aria-describedby="timezone-help" /></label><p id="timezone-help" className="field-note">For example, America/New_York or UTC.</p>
     <button disabled={busy} type="submit">{busy ? 'Saving…' : 'Save profile'}</button><p role="status">{message}</p>
   </form>}</section>
 }

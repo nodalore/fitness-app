@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { ProfilePage } from './ProfilePage'
 import { defaultProfile } from './profile'
 
@@ -19,6 +19,8 @@ beforeEach(() => {
   mocks.upsert.mockReturnValue({ select: () => ({ single: mocks.single }) })
   mocks.from.mockReturnValue({ select: () => ({ eq: mocks.eq }), upsert: mocks.upsert })
 })
+afterEach(() => vi.restoreAllMocks())
+
 function page() {
   return render(<MemoryRouter initialEntries={['/profile']}><Routes><Route path="/profile" element={<ProfilePage />} /><Route path="/login" element={<h1>Sign in required</h1>} /></Routes></MemoryRouter>)
 }
@@ -75,4 +77,27 @@ test('empty profile starts with editable defaults', async () => {
   page()
   await waitFor(() => expect(screen.getByLabelText('Display name')).toHaveValue(''))
   expect(screen.getByLabelText('Fitness goal')).toHaveValue('general_fitness')
+})
+
+
+test.each(['existing', 'new'])('%s profiles save the detected timezone without asking the user', async kind => {
+  const options = Intl.DateTimeFormat().resolvedOptions()
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ ...options, timeZone: 'Pacific/Auckland' })
+  mocks.maybeSingle.mockResolvedValue({ data: kind === 'new' ? null : { ...defaultProfile, timezone: 'America/New_York' }, error: null })
+  page()
+  await screen.findByLabelText('Display name')
+  expect(screen.queryByLabelText(/timezone/i)).not.toBeInTheDocument()
+  expect(screen.queryByText(/For example, America/)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
+  expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ timezone: 'Pacific/Auckland', user_id: 'test-user-a' }), { onConflict: 'user_id' })
+  expect(screen.getByRole('status')).toHaveTextContent('Profile saved to Supabase.')
+})
+
+test('profile saving falls back to UTC if browser timezone detection is unavailable', async () => {
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(() => { throw new Error('Unavailable') })
+  page()
+  await screen.findByLabelText('Display name')
+  await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
+  expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ timezone: 'UTC' }), { onConflict: 'user_id' })
+  expect(screen.getByRole('status')).toHaveTextContent('Profile saved to Supabase.')
 })

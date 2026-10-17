@@ -8,7 +8,7 @@ The frontend now uses Supabase Auth for registration, email confirmation, login,
 
 `/profile` requires a session and reads/writes only the current user's profile ID. Database policies provide the actual isolation even if someone bypasses the interface. There is no privileged frontend key. A profile is created on its first successful save, avoiding a privileged signup trigger and making profile-save errors visible rather than breaking registration.
 
-The profile editor saves name, goal, experience, available days, equipment, review timeline, units, and timezone. It does not generate routines; that is Stage 3. New account defaults are starting form values and are not evidence-based prescriptions. Onboarding is not marked complete by this form.
+The profile editor saves name, goal, experience, available days, equipment, review timeline, and units. Timezone is detected automatically from the browser on each save and persisted in the existing `profiles.timezone` column, with UTC as a fallback if detection is unavailable. There is no timezone question. Later workout-date displays and weekly summaries must use the saved zone explicitly. It does not generate routines; that is Stage 3. New account defaults are starting form values and are not evidence-based prescriptions. Onboarding is not marked complete by this form.
 
 New auth screens use a paper-and-ink training-journal direction: serif typography, CSS color variables, ruled background texture, vermilion accents, and a short entrance animation that respects reduced-motion preferences. No external font service or image download is required.
 
