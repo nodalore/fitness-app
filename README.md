@@ -1,6 +1,6 @@
 # Fitness App
 
-Stage 2: registration, login/logout, email confirmation, password recovery, and profile management are implemented locally. Database migrations and security tests are prepared for review. Apply the reviewed migrations before saving profiles. Routine recommendations and workout logging screens belong to later stages.
+Stage 3: profile-based recommendations, a custom routine editor, saved-plan viewing, and archiving are implemented locally. Stage 2 accounts and profiles are working on Supabase as reported by the user. Routine saving requires review/approval of the atomic save-function migration; no live schema changes were made by the agent. See [Stage 3 setup and tests](docs/STAGE_3.md). Workout logging remains Stage 4.
 
 ## Run locally
 
@@ -45,7 +45,7 @@ Open http://127.0.0.1:4173. When publishing in a later stage, configure the host
 ## How the files work
 
 - `index.html` loads `src/main.tsx`, which starts React and browser routing.
-- `src/App.tsx` defines the shared header/footer and public/auth/profile routes.
+- `src/App.tsx` defines the shared header/footer and public/auth/profile/routine routes. The routine page is loaded on demand.
 - `src/styles.css` provides responsive styling without an additional UI framework.
 - `vite.config.ts` configures React development/build tooling and Vitest.
 - `src/App.test.tsx` and `src/test/setup.ts` contain smoke-test setup and checks.
@@ -69,12 +69,16 @@ Do not use the dashboard URL or an API path such as `/rest/v1`. Save the file an
 
 To recreate the file if it is absent, copy `.env.example` to `.env.local`; do not overwrite existing values. You can verify exclusion with `git check-ignore .env.local`. Full dashboard and authorization steps are in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 
-## Finish Stage 2: review and apply migrations
+## Database setup and verification
 
-Read [docs/STAGE_2_REVIEW.md](docs/STAGE_2_REVIEW.md) for the SQL review, exact SQL Editor steps, auth URL settings, and live test checklist. The two migration files are under `supabase/migrations/`. They have not been run on your project by the agent. Never disable RLS or add public access policies to personal tables.
+Read [docs/STAGE_2_REVIEW.md](docs/STAGE_2_REVIEW.md) for the SQL review, exact SQL Editor steps, auth URL settings, and live test checklist. The initial two migrations have been applied by the user; do not rerun them. The new `202610170003_routine_save.sql` function migration is prepared for explicit review and approval before hosted execution. Never disable RLS or add public access policies to personal tables.
 
 After applying them, select **Sign in → Create an account**, confirm email, and save your profile. Refresh and sign out/in to verify persistence. The guide explains testing two-account isolation and recovery. `supabase/tests/live_rls.sql` is a separate reviewed, rollback-only verification script, not a migration.
 
 `npm run test:db` runs local security tests; `npm run check:connection` checks live Auth connectivity using only the public settings. Auth unit tests are mocked; local database tests emulate Supabase roles and cannot replace live acceptance checks.
 
-The MVP prioritizes secure accounts, persistence, workout logging, basic recommendations/comparisons, substitutions, and public deployment. Advanced charts, countdown timers, extensive filtering, and a large exercise library are postponed. The agent verified read-only Auth connectivity (HTTP 200); no live Supabase changes or deployment have been performed. Stage 3 remains unapproved.
+The MVP prioritizes secure accounts, persistence, workout logging, basic recommendations/comparisons, substitutions, and public deployment. Advanced charts, countdown timers, extensive filtering, and a large exercise library are postponed. The agent verified read-only Auth connectivity (HTTP 200); no live Supabase changes or deployment have been performed. Stage 3 is authorized after the available security checks passed. Hosted two-user verification and routine-save migration approval remain pending; Stage 4 is unapproved.
+
+## Routine planning
+
+Sign in and open **Routines** or use the link from Profile. Review suggestions, select **Customize & save**, or select **Create a routine**. The editor supports workout days, exercise order, sets, rep ranges, rest, and notes. Archive preserves the plan and future history. [docs/STAGE_3.md](docs/STAGE_3.md) explains the rules, limitations, SQL approval step, and live persistence checks. No paid AI service or new frontend dependency is used.

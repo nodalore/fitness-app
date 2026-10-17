@@ -1,6 +1,6 @@
 # Stage 2 review and SQL Editor handoff
 
-Status: implemented locally; live Supabase migration execution and end-to-end acceptance are pending your review. Stage 3 has not begun.
+Status: the user confirms hosted registration, login, and profile persistence. The available local security suite and read-only hosted anonymous checks passed. Hosted two-user isolation/logout/recovery acceptance remains pending. The latest user request authorized Stage 3 after the available checks; see [STAGE_3.md](STAGE_3.md) for implementation and remaining SQL approval.
 
 ## What changed and why
 
@@ -81,7 +81,7 @@ A normal administrator query in SQL Editor is not a valid RLS test: administrato
 
 PGlite is a development-only PostgreSQL test dependency and is not included in the frontend bundle. Its auth schema is a minimal local test fixture; it does not replace tests on your hosted Supabase installation. Auth UI tests use mocked SDK responses: passing them is not evidence that production email delivery or a real user session has passed.
 
-Stage 2 is complete only after both migrations are applied and real registration/login/logout/recovery, profile persistence, and the live RLS test succeed. Until then, report the remaining work explicitly. Routine recommendation/editing, workout logging screens, and comparisons remain later stages.
+Full hosted Stage 2 acceptance still requires registration/login/logout/recovery, profile persistence, and the live RLS test. Registration/login/profile persistence are user-confirmed; local isolation and hosted anonymous checks passed. The latest user instruction authorized proceeding to Stage 3 after available security checks pass, so routine implementation has proceeded with the remaining hosted checks explicitly pending. Workout logging and comparisons remain later stages.
 
 ## Operational notes
 

@@ -1,6 +1,6 @@
 # Fitness App — MVP specification
 
-Status: architecture approved; Stage 1 completed; Stage 2 authorized, with work stopping at any missing credentials or authorization. Stage 3 and later require separate approval.
+Status: Stages 1–2 implemented; user reports hosted registration/login/profile persistence working. Available local security and hosted anonymous checks passed. Stage 3 is authorized and implemented locally, pending approval of the routine-save function and hosted acceptance checks. Stage 4 and later are not authorized.
 Prepared: 2026-10-17.
 
 ## 1. Project inspection
@@ -138,13 +138,13 @@ Sources checked 2026-10-17. Source mapping will be carried into the in-app metho
 
 ## 12. Approval and external setup dependencies
 
-Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. The architecture and Stages 1–2 were approved. Stop Stage 2 if credentials or authorization are needed. Stage 3 and later require explicit approval.
+Approval of this plan is required before scaffolding, installing dependencies, applying migrations, or provisioning/publishing services. The architecture and Stages 1–2 were approved. Stop Stage 2 if credentials or authorization are needed. Stage 3 was authorized after available security checks pass; those checks passed. Stage 4 and later require explicit approval.
 
 A real deployment requires access to a user-owned Supabase project (project URL, publishable key, and an approved secure path for migrations), production email configuration, and Sites hosting permissions. No connected Supabase provisioning tool is currently exposed. Verify the available CLI/dashboard authentication after approval; if unavailable, prepare migrations and exact setup steps and request the minimum required connection. Never ask for secret keys in chat. Service costs and plan limits must be checked before any paid provisioning; no paid resource purchase is included in plan approval. Public hosting exposes the app's entry pages, while individual workout records remain private.
 
 ## 13. Approved implementation priorities
 
-Stage 1 is complete. Stage 2 (database setup, authentication, and security) is now authorized; stop if credentials or authorization are needed. Stage 3 is not authorized. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Secure authentication, Supabase persistence, logging, basic recommendations/comparisons, exercise substitutions, and public deployment remain core. Start with a small curated exercise library. Postpone advanced charts, countdown timers, and extensive filtering. Stage 1 delivers only the runnable frontend shell and verification setup; it does not provision services, implement authentication, or publish a site.
+Stage 1 is complete. Stage 2 (database setup, authentication, and security) is now authorized; stop if credentials or authorization are needed. Stage 3 is now authorized after the available security checks passed. No live schema changes are authorized without approval. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Secure authentication, Supabase persistence, logging, basic recommendations/comparisons, exercise substitutions, and public deployment remain core. Start with a small curated exercise library. Postpone advanced charts, countdown timers, and extensive filtering. Stage 1 delivers only the runnable frontend shell and verification setup; it does not provision services, implement authentication, or publish a site.
 
 ## 14. Persistent frontend design requirements
 
@@ -165,4 +165,12 @@ The user created an empty Supabase project, configured the public URL/key locall
 
 Stage 2 is implemented locally: registration, sign-in/local-browser sign-out, confirmation/recovery routes, protected profile editing, the ten-table schema with RLS, a twelve-exercise seed, and automated frontend/PostgreSQL security tests. Profile rows are created on first save, avoiding a privileged registration trigger. The timestamp trigger uses caller privileges. Workout/recommendation RPCs are intentionally deferred to their feature stages.
 
-The exact migration files are tested in isolated PGlite PostgreSQL with minimal Supabase identity emulation. This adds a development-only test dependency; it is not an application database or a replacement for hosted Supabase. Review `docs/STAGE_2_REVIEW.md`, apply each SQL file manually only after review, then verify real authentication, profile persistence, and live permissions. A separate SQL verification script uses client roles and rolls back its temporary data. Stage 2 remains incomplete until live acceptance passes. Stage 3 remains unapproved. All file access and project writes for this stage stay inside `~/fitness-app`.
+The exact migration files are tested in isolated PGlite PostgreSQL with minimal Supabase identity emulation. This adds a development-only test dependency; it is not an application database or a replacement for hosted Supabase. Review `docs/STAGE_2_REVIEW.md`, apply each SQL file manually only after review, then verify real authentication, profile persistence, and live permissions. A separate SQL verification script uses client roles and rolls back its temporary data. Stage 2 remains incomplete until live acceptance passes. Stage 3 is authorized after the available security checks; hosted two-user verification remains pending. All file access and project writes for this stage stay inside `~/fitness-app`.
+
+## 16. Stage 3 implementation checkpoint
+
+The current user authorized recommendations and routine management after the available security tests pass. The original 115-test suite passed, including two-user local PostgreSQL isolation, and ten read-only hosted checks passed (seven anonymous personal-table denials and three seeded public catalogs). Hosted signed-in two-user verification cannot be inferred from those results; it remains explicitly pending.
+
+Stage 3 now provides deterministic, equipment-filtered recommendations, explained prescription defaults, custom creation/editing/reordering, owner-filtered fresh database reads, and archive confirmation. The existing small catalog is reused; unsupported equipment coverage is explained rather than fabricating routines. Timeline affects review timing only. Sources, input assumptions, and rule version are saved with recommended plans.
+
+A new caller-privilege atomic-save function is prepared in `supabase/migrations/202610170003_routine_save.sql` and tested locally only. It changes no table or RLS policy. Hosted schema changes require explicit approval before this file can be applied. Saving shows an actionable setup error until then. Editing a plan with sessions creates a new version and archives the old version to protect history. `docs/STAGE_3.md` records the full rule mapping, test evidence, SQL review, and remaining live acceptance steps. Stage 4 has not started.

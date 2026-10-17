@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router'
 import { supabaseConfiguration } from './lib/supabase'
 import { AuthProvider, useAuth } from './features/auth/AuthProvider'
 import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, CallbackPage } from './features/auth/AuthPages'
 import { ProfilePage } from './features/profile/ProfilePage'
+
+const RoutinesPage = lazy(() => import('./features/routines/RoutinesPage').then(module => ({ default: module.RoutinesPage })))
 
 function Home() {
   return <>
@@ -21,7 +23,7 @@ function Home() {
         <article><span className="number">03 / REFLECT</span><h3>Compare your workouts</h3><p>Look back at previous sessions and compare the same exercise over time.</p></article>
       </div>
     </section>
-    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>Stage 2 preview: create an account and save your profile once the reviewed database migrations are applied. Workout logging arrives in a later stage.</p><p role="status">{supabaseConfiguration.ready ? 'Supabase configuration loaded. Sign in to access your profile.' : supabaseConfiguration.message}</p></aside>
+    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>Create an account, save your profile, and explore your routine options. Workout logging arrives in a later stage.</p><p role="status">{supabaseConfiguration.ready ? 'Supabase configuration loaded. Sign in to access your profile.' : supabaseConfiguration.message}</p></aside>
   </>
 }
 
@@ -29,7 +31,7 @@ function About() {
   return <section className="reading">
     <p className="eyebrow">THE APPROACH</p><h1>Simple tools.<br />Thoughtful guidance.</h1>
     <p className="intro">Fitness App is being built around consistent training and an honest record of what you do.</p>
-    <h2>Recommendations you can understand</h2><p>The MVP will use documented rules to suggest routines. You’ll be able to see why a routine fits, change it, and choose alternative exercises. No paid AI service is needed.</p>
+    <h2>Recommendations you can understand</h2><p>The app uses documented rules to suggest routines. You can see why a routine fits and customize its exercise prescription. No paid AI service is needed.</p>
     <h2>Your timeline is a review point</h2><p>Your chosen timeline will help you decide when to review your training. The app will not promise a particular result by a particular date.</p>
     <h2>Sources behind the plan</h2><p>These are the reference sources selected for the upcoming recommendation system. Detailed guidance and app assumptions will be documented as that system is implemented.</p>
     <ul className="sources">
@@ -62,7 +64,7 @@ function AccountNavigation() {
     } catch { setError('Unable to sign out. Check your connection and retry.') }
     finally { setBusy(false) }
   }
-  return <>{loading ? <span role="status">Checking session…</span> : session ? <><NavLink to="/profile">Profile</NavLink><button className="logout-button" onClick={logout} disabled={busy}>{busy ? 'Signing out…' : 'Sign out'}</button></> : <NavLink to="/login">Sign in</NavLink>}{error && <span role="alert">{error}</span>}</>
+  return <>{loading ? <span role="status">Checking session…</span> : session ? <><NavLink to="/profile">Profile</NavLink><NavLink to="/routines">Routines</NavLink><button className="logout-button" onClick={logout} disabled={busy}>{busy ? 'Signing out…' : 'Sign out'}</button></> : <NavLink to="/login">Sign in</NavLink>}{error && <span role="alert">{error}</span>}</>
 }
 
 function AppShell() {
@@ -70,7 +72,7 @@ function AppShell() {
   const mainRef = useRef<HTMLElement>(null)
   const previousPath = useRef(pathname)
   useEffect(() => {
-    const titles: Record<string, string> = { '/': 'Home', '/about': 'Our approach', '/login': 'Sign in', '/register': 'Create account', '/profile': 'Profile', '/auth/forgot-password': 'Reset password', '/auth/reset-password': 'New password', '/auth/callback': 'Email confirmation' }
+    const titles: Record<string, string> = { '/': 'Home', '/about': 'Our approach', '/login': 'Sign in', '/register': 'Create account', '/profile': 'Profile', '/routines': 'Routines', '/auth/forgot-password': 'Reset password', '/auth/reset-password': 'New password', '/auth/callback': 'Email confirmation' }
     document.title = `${titles[pathname] ?? 'Page not found'} | Fitness App`
     if (previousPath.current !== pathname) {
       mainRef.current?.focus()
@@ -81,7 +83,7 @@ function AppShell() {
   return <div className="app">
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="header"><Link className="brand" to="/" aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true">F</span> Fitness App</Link><nav aria-label="Main navigation"><NavLink to="/" end>Home</NavLink><NavLink to="/about">Our approach</NavLink><AccountNavigation /></nav></header>
-    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/profile" element={<ProfilePage />} /><Route path="*" element={<NotFound />} /></Routes></main>
-    <footer><span>Fitness App</span><span>Stage 2 · Accounts & profiles</span></footer>
+    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/profile" element={<ProfilePage />} /><Route path="/routines" element={<Suspense fallback={<p role="status">Loading routines…</p>}><RoutinesPage /></Suspense>} /><Route path="*" element={<NotFound />} /></Routes></main>
+    <footer><span>Fitness App</span><span>Stage 3 · Routine planning</span></footer>
   </div>
 }

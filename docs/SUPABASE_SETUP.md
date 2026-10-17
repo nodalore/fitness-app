@@ -57,7 +57,7 @@ The agent will implement and verify Stage 2 only:
 4. Security tests using anonymous access and two separate test users. Tests must target this dedicated development project and clean up only their own fixtures.
 5. Automated frontend checks plus real authentication, persistence, and cross-account isolation verification. Missing live checks must be reported as unverified.
 
-Do not send test account passwords in chat. The agent will agree on local test configuration when the security tests are ready. Stage 3 recommendation and routine-editing features require separate approval.
+Do not send test account passwords in chat. The agent will agree on local test configuration when the security tests are ready. Stage 3 recommendation and routine-editing work is now authorized after the available security checks; see STAGE_3.md for the remaining save-function review.
 
 ## Official references
 
@@ -71,4 +71,4 @@ Documentation checked 2026-10-17. Dashboard labels can change; use the linked of
 
 ## Current handoff
 
-The dashboard SQL workflow is selected. Review [STAGE_2_REVIEW.md](STAGE_2_REVIEW.md) and the two migration files before running anything in SQL Editor. No privileged keys are needed by the frontend. Live database changes remain under your control. Stage 3 is unapproved.
+The dashboard SQL workflow is selected. Review [STAGE_2_REVIEW.md](STAGE_2_REVIEW.md) and the two migration files before running anything in SQL Editor. No privileged keys are needed by the frontend. Live database changes remain under your control. Stage 3 is implemented locally. Its new save-function migration still requires approval before hosted execution; see STAGE_3.md. Stage 4 is unapproved.
