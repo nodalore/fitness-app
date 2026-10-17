@@ -2,6 +2,10 @@
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 import { beforeAll, afterAll, describe, expect, test } from 'vitest'
+import { recommendRoutines } from '../../src/features/routines/recommendations'
+import { validateRoutine } from '../../src/features/routines/routineValidation'
+import { defaultProfile } from '../../src/features/profile/profile'
+import type { Exercise } from '../../src/features/routines/types'
 
 let db: PGlite
 const A = 'a0000000-0000-4000-8000-000000000001'
@@ -42,7 +46,7 @@ beforeAll(async () => {
     grant usage on schema auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;`)
   await db.query('insert into auth.users values ($1),($2),($3)', [A, B, C])
-  for (const file of ['202610170001_schema.sql', '202610170002_reference_seed.sql']) {
+  for (const file of ['202610170001_schema.sql', '202610170002_reference_seed.sql', '202610170003_routine_save.sql']) {
     await db.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
   }
   for (const table of tables) for (const owner of [A, B]) await insert(table, fixture(table, owner))
@@ -155,4 +159,131 @@ test('the SQL Editor verification script runs and rolls back without altering ex
   await db.exec(sql)
   expect((await db.query<{ display_name: string }>('select display_name from public.profiles where user_id=$1', [A])).rows[0].display_name).toBe('Private A')
   expect((await db.query('select * from public.routines')).rows).toHaveLength(2)
+})
+
+
+const document = {
+  name: 'Atomic test plan', goal: 'strength', origin_template_key: null, recommendation_version: null,
+  assumptions: { origin: 'custom' }, days: [{ name: 'Training day', weekday: 1, exercises: [
+    { exercise_id: exercise, target_sets: 2, rep_min: 8, rep_max: 12, rest_seconds: 120, notes: 'Test prescription' },
+  ] }],
+}
+const freshId = 'd0000000-0000-4000-8000-000000000001'
+const requestId = 'e0000000-0000-4000-8000-000000000001'
+async function rpc(id = freshId, value: unknown = document, request = requestId, timestamp: string | null = null) {
+  const { rows } = await db.query<{ id: string }>('select public.fitness_save_routine($1,$2::jsonb,$3,$4::timestamptz) as id', [id, JSON.stringify(value), request, timestamp])
+  return rows[0].id
+}
+
+test('routine RPC is caller-privilege, fixed-search-path, and unavailable anonymously', async () => {
+  const { rows } = await db.query<{ prosecdef: boolean; proconfig: string[] }>("select prosecdef,proconfig from pg_proc where proname='fitness_save_routine'")
+  expect(rows[0].prosecdef).toBe(false)
+  expect(rows[0].proconfig).toContain('search_path=""')
+  await expect(asUser(null, () => rpc())).rejects.toThrow(/permission denied/)
+})
+
+test('routine create is atomic, retry-safe, and saves days plus exercise prescriptions', async () => {
+  await asUser(A, async () => {
+    expect(await rpc()).toBe(freshId)
+    expect(await rpc()).toBe(freshId)
+    expect((await db.query('select * from public.routines where id=$1', [freshId])).rows).toHaveLength(1)
+    const { rows } = await db.query<{ rep_min: number; rest_seconds: number }>('select e.* from public.routine_exercises e join public.routine_days d on d.id=e.routine_day_id where d.routine_id=$1', [freshId])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].rep_min).toBe(8)
+    expect(rows[0].rest_seconds).toBe(120)
+  })
+})
+
+test('failed routine creation rolls back its parent and child writes', async () => {
+  await asUser(A, async () => {
+    await db.exec('savepoint failed_save')
+    await expect(rpc(freshId, { ...document, days: [...document.days, { name: 'Invalid', weekday: 3, exercises: [] }] })).rejects.toThrow(/1 to 20 exercises/)
+    await db.exec('rollback to savepoint failed_save')
+    expect((await db.query('select * from public.routines where id=$1', [freshId])).rows).toHaveLength(0)
+    expect((await db.query('select * from public.routine_days where routine_id=$1', [freshId])).rows).toHaveLength(0)
+  })
+})
+
+test('cross-account routine RPC edits cannot read or modify another owner’s plan', async () => {
+  const stamp = (await db.query<{ updated_at: string }>('select updated_at::text from public.routines where id=$1', [B])).rows[0].updated_at
+  await expect(asUser(A, () => rpc(B, document, requestId, stamp))).rejects.toThrow(/Routine unavailable/)
+  expect((await db.query<{ name: string }>('select name from public.routines where id=$1', [B])).rows[0].name).toBe('Private routine')
+})
+
+test('stale routine edits are rejected', async () => {
+  await expect(asUser(A, () => rpc(A, document, requestId, '2000-01-01T00:00:00Z'))).rejects.toThrow(/Routine changed/)
+})
+
+test('editing a historical routine creates a version while preserving its original days and sessions', async () => {
+  const stamp = (await db.query<{ updated_at: string }>('select updated_at::text from public.routines where id=$1', [A])).rows[0].updated_at
+  await asUser(A, async () => {
+    const nextId = await rpc(A, document, requestId, stamp)
+    expect(nextId).not.toBe(A)
+    expect(await rpc(A, document, requestId, stamp)).toBe(nextId)
+    expect((await db.query<{ archived_at: string }>('select archived_at from public.routines where id=$1', [A])).rows[0].archived_at).not.toBeNull()
+    expect((await db.query('select * from public.routine_days where id=$1', [A])).rows).toHaveLength(1)
+    expect((await db.query<{ routine_id: string }>('select routine_id from public.workout_sessions where id=$1', [A])).rows[0].routine_id).toBe(A)
+  })
+})
+
+test('same retry token with a changed document is rejected', async () => {
+  await asUser(A, async () => {
+    await rpc()
+    await expect(rpc(freshId, { ...document, name: 'Different payload' })).rejects.toThrow(/Retry token reused/)
+  })
+})
+
+test('editing a routine without history replaces its structure; a failed edit preserves the original', async () => {
+  await asUser(A, async () => {
+    await rpc()
+    const stamp = (await db.query<{ stamp: string }>('select updated_at::text as stamp from public.routines where id=$1', [freshId])).rows[0].stamp
+    await db.exec('savepoint edit')
+    await expect(rpc(freshId, { ...document, name: 'Invalid edit', days: [{ ...document.days[0], exercises: [{ ...document.days[0].exercises[0], rep_max: 0 }] }] }, C, stamp)).rejects.toThrow()
+    await db.exec('rollback to savepoint edit')
+    expect((await db.query<{ name: string }>('select name from public.routines where id=$1', [freshId])).rows[0].name).toBe(document.name)
+    await rpc(freshId, { ...document, name: 'Edited name' }, C, stamp)
+    expect((await db.query<{ name: string }>('select name from public.routines where id=$1', [freshId])).rows[0].name).toBe('Edited name')
+    expect((await db.query('select * from public.routine_days where routine_id=$1', [freshId])).rows).toHaveLength(1)
+  })
+})
+
+test('archive is owner-only and keeps routine children', async () => {
+  await asUser(A, async () => {
+    expect((await db.query('update public.routines set archived_at=now() where id=$1 returning *', [B])).rows).toHaveLength(0)
+    await db.query('update public.routines set archived_at=now() where id=$1', [A])
+    expect((await db.query('select * from public.routine_days where routine_id=$1', [A])).rows).toHaveLength(1)
+  })
+})
+
+
+test('recommendations generated from the actual seed can all be saved atomically', async () => {
+  const catalog = (await db.query<Exercise>('select * from public.exercises')).rows
+  for (const goal of ['general_fitness', 'strength', 'muscle_growth']) {
+    const result = recommendRoutines({ ...defaultProfile, goal, experience: 'intermediate', equipment: ['dumbbell', 'barbell', 'machine'], available_weekdays: [1,2,4,5] }, catalog)
+    expect(result.options).toHaveLength(3)
+    for (const option of result.options) {
+      expect(validateRoutine(option.document, catalog)).toBeNull()
+      await asUser(A, async () => {
+        expect(await rpc(freshId, option.document)).toBe(freshId)
+        expect((await db.query('select * from public.routine_days where routine_id=$1', [freshId])).rows).toHaveLength(option.document.days.length)
+      })
+    }
+  }
+})
+
+test('the hosted routine-RPC verification script runs with exact migration semantics', async () => {
+  const sql = readFileSync(new URL('./live_routine_save.sql', import.meta.url), 'utf8').replaceAll('USER_A_UUID', A).replaceAll('USER_B_UUID', B)
+  await db.exec(sql)
+})
+
+test('committed routine data survives identity changes and a fresh database read', async () => {
+  // No live credentials: the local PostgreSQL roles emulate independent client requests.
+  await db.exec('begin; set local role authenticated;')
+  try {
+    await db.query("select set_config('request.jwt.claim.sub',$1,true)", [A])
+    await rpc()
+    await db.exec('commit')
+  } catch (error) { await db.exec('rollback'); throw error }
+  expect((await asUser(B, () => db.query('select * from public.routines where id=$1', [freshId]))).rows).toHaveLength(0)
+  expect((await asUser(A, () => db.query<{ name: string }>('select name from public.routines where id=$1', [freshId]))).rows[0].name).toBe(document.name)
 })

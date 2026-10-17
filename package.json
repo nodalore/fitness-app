@@ -15,7 +15,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "check": "npm run test && npm run build",
     "check:connection": "node scripts/check-supabase.mjs",
-    "test:db": "vitest run supabase/tests"
+    "test:db": "vitest run supabase/tests",
+    "check:security:live": "node scripts/check-live-security.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
