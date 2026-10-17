@@ -2,6 +2,10 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import App from './App'
+import { vi } from 'vitest'
+
+// Never contact the configured live project from unit tests.
+vi.mock('./lib/supabase', () => ({ getSupabaseClient: () => null, supabaseConfiguration: { ready: false, message: 'Supabase is not configured.' } }))
 
 function renderAt(path = '/') {
   return render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
@@ -14,7 +18,7 @@ test('home has accessible landmarks, navigation, and an honest preview status', 
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Build a routine.')
   expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', '#main')
   expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
-  expect(screen.getByText(/No workout data is collected here/)).toBeVisible()
+  expect(screen.getByText(/Workout logging arrives in a later stage/)).toBeVisible()
 })
 
 test('navigation changes pages, updates title, and moves focus to content', async () => {

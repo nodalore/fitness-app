@@ -1,5 +1,5 @@
 :root {
-  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-family:'Baskerville','Palatino Linotype','Book Antiqua',serif;
   color:#203a32;
   background:#f7f8f3;
   font-synthesis:none;
@@ -335,4 +335,72 @@ footer {
 }
 
 
+}
+
+/* Training journal: ink, paper, and a small vermilion editorial accent. */
+:root {
+  --ink: #163e34;
+  --paper: #f5f0e5;
+  --accent: #ad3e24;
+  --line: #cbc8b7;
+  --quiet: #4d5d50;
+  --surface: #fffdf5;
+  font-family: 'Baskerville', 'Palatino Linotype', 'Book Antiqua', serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+body {
+  background-image: linear-gradient(90deg, transparent 49px, #ad3e240a 50px, transparent 51px), repeating-linear-gradient(0deg, transparent 0 31px, #163e3405 31px 32px);
+}
+.eyebrow, .number, .journal-stamp, .account-email, .field-note {
+  font-family: 'Courier New', monospace;
+}
+.account-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 70px;
+  padding: 72px 0;
+  min-height: 70vh;
+  align-items: start;
+}
+.account-intro h1, .profile-page h1 { font-weight: 500; }
+.account-intro > p:not(.eyebrow) { max-width: 360px; font-size: 19px; color: var(--quiet); }
+.journal-stamp { display: inline-block; border: 1px solid var(--accent); color: var(--accent); font-size: 11px; padding: 8px 12px; letter-spacing: 1px; margin-top: 24px; transform: rotate(-2deg); }
+.account-panel { background: var(--surface); padding: 32px; border: 1px solid var(--line); border-top: 4px solid var(--accent); box-shadow: 8px 8px 0 #163e340c; }
+.account-panel h2 { margin-top: 0; font-size: 28px; }
+form label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; margin-bottom: 20px; }
+input, select, button { font: inherit; }
+input:not([type=checkbox]), select { width: 100%; min-height: 46px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid #798275; border-radius: 2px; font-size: 17px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button { border: 1px solid var(--ink); background: var(--ink); color: white; min-height: 44px; padding: 10px 20px; cursor: pointer; font-weight: 600; }
+button:hover { background: #285b45; }
+button:disabled { opacity: .65; cursor: wait; }
+.logout-button { border: none; background: transparent; color: var(--ink); padding: 0; min-height: auto; font-size: 14px; }
+.logout-button:hover { background: transparent; text-decoration: underline; }
+nav { align-items: center; }
+[role=alert]:not(:empty) { color: #98351f; }
+.account-panel [role=status], .profile-form [role=status] { color: var(--ink); }
+.profile-page { max-width: 780px; padding: 60px 0; }
+.profile-form { border-top: 3px solid var(--accent); padding-top: 28px; }
+.form-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+fieldset { border: 1px solid var(--line); margin: 0 0 24px; padding: 18px; }
+legend { padding: 0 8px; font-weight: 600; }
+.choice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.choice-grid label { flex-direction: row; align-items: center; margin: 0; font-weight: 400; cursor: pointer; min-height: 32px; }
+input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ink); }
+.field-note { font-size: 12px; color: var(--quiet); margin-top: -12px; }
+.account-email { font-size: 12px; overflow-wrap: anywhere; }
+@keyframes journal-reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .account-intro { animation: journal-reveal .45s ease-out both; }
+  .account-panel { animation: journal-reveal .45s .1s ease-out both; }
+}
+@media (max-width: 760px) {
+  .header { flex-wrap: wrap; }
+  nav { flex-wrap: wrap; gap: 16px; }
+  .account-layout { grid-template-columns: 1fr; gap: 32px; padding: 40px 0; }
+  .account-panel { padding: 24px; }
+  .form-columns { grid-template-columns: 1fr; gap: 0; }
+  .choice-grid { grid-template-columns: 1fr 1fr; }
+  .profile-page { padding-top: 40px; }
 }

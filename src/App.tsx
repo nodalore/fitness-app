@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router'
 import { supabaseConfiguration } from './lib/supabase'
+import { AuthProvider, useAuth } from './features/auth/AuthProvider'
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, CallbackPage } from './features/auth/AuthPages'
+import { ProfilePage } from './features/profile/ProfilePage'
 
 function Home() {
   return <>
@@ -18,7 +21,7 @@ function Home() {
         <article><span className="number">03 / REFLECT</span><h3>Compare your workouts</h3><p>Look back at previous sessions and compare the same exercise over time.</p></article>
       </div>
     </section>
-    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>Stage 2 connection setup is underway. Accounts and workout saving are not available yet. No workout data is collected here.</p><p role="status">{supabaseConfiguration.ready ? 'Supabase configuration loaded. The live connection has not been verified yet.' : supabaseConfiguration.message}</p></aside>
+    <aside className="notice" aria-labelledby="status-title"><h2 id="status-title">The foundation is ready</h2><p>Stage 2 preview: create an account and save your profile once the reviewed database migrations are applied. Workout logging arrives in a later stage.</p><p role="status">{supabaseConfiguration.ready ? 'Supabase configuration loaded. Sign in to access your profile.' : supabaseConfiguration.message}</p></aside>
   </>
 }
 
@@ -43,11 +46,32 @@ function NotFound() {
 }
 
 export default function App() {
+  return <AuthProvider><AppShell /></AuthProvider>
+}
+
+function AccountNavigation() {
+  const { client, session, loading } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function logout() {
+    if (!client || busy) return
+    setBusy(true); setError('')
+    try {
+      const { error } = await client.auth.signOut({ scope: 'local' })
+      if (error) setError('Unable to sign out. Please retry.')
+    } catch { setError('Unable to sign out. Check your connection and retry.') }
+    finally { setBusy(false) }
+  }
+  return <>{loading ? <span role="status">Checking session…</span> : session ? <><NavLink to="/profile">Profile</NavLink><button className="logout-button" onClick={logout} disabled={busy}>{busy ? 'Signing out…' : 'Sign out'}</button></> : <NavLink to="/login">Sign in</NavLink>}{error && <span role="alert">{error}</span>}</>
+}
+
+function AppShell() {
   const { pathname } = useLocation()
   const mainRef = useRef<HTMLElement>(null)
   const previousPath = useRef(pathname)
   useEffect(() => {
-    document.title = `${pathname === '/' ? 'Home' : pathname === '/about' ? 'Our approach' : 'Page not found'} | Fitness App`
+    const titles: Record<string, string> = { '/': 'Home', '/about': 'Our approach', '/login': 'Sign in', '/register': 'Create account', '/profile': 'Profile', '/auth/forgot-password': 'Reset password', '/auth/reset-password': 'New password', '/auth/callback': 'Email confirmation' }
+    document.title = `${titles[pathname] ?? 'Page not found'} | Fitness App`
     if (previousPath.current !== pathname) {
       mainRef.current?.focus()
       previousPath.current = pathname
@@ -56,8 +80,8 @@ export default function App() {
 
   return <div className="app">
     <a className="skip-link" href="#main">Skip to content</a>
-    <header className="header"><Link className="brand" to="/" aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true">F</span> Fitness App</Link><nav aria-label="Main navigation"><NavLink to="/" end>Home</NavLink><NavLink to="/about">Our approach</NavLink></nav></header>
-    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="*" element={<NotFound />} /></Routes></main>
-    <footer><span>Fitness App</span><span>Stage 2 · Connection setup</span></footer>
+    <header className="header"><Link className="brand" to="/" aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true">F</span> Fitness App</Link><nav aria-label="Main navigation"><NavLink to="/" end>Home</NavLink><NavLink to="/about">Our approach</NavLink><AccountNavigation /></nav></header>
+    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/profile" element={<ProfilePage />} /><Route path="*" element={<NotFound />} /></Routes></main>
+    <footer><span>Fitness App</span><span>Stage 2 · Accounts & profiles</span></footer>
   </div>
 }

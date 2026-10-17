@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "check:connection": "node scripts/check-supabase.mjs",
+    "test:db": "vitest run supabase/tests"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
@@ -22,9 +24,11 @@
     "react-router": "8.4.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",
+    "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",

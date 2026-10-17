@@ -1,6 +1,6 @@
 # Fitness App
 
-Stage 2 connection preparation: a React + TypeScript frontend with a Supabase client configuration. The local website has a home page, an approach/source page, navigation, and a friendly missing-page route. Authentication, database persistence, routine recommendations, and workout logging are not implemented yet.
+Stage 2: registration, login/logout, email confirmation, password recovery, and profile management are implemented locally. Database migrations and security tests are prepared for review. Apply the reviewed migrations before saving profiles. Routine recommendations and workout logging screens belong to later stages.
 
 ## Run locally
 
@@ -22,7 +22,7 @@ The public pages run without Supabase configuration. To prepare the connection, 
 npm run check
 ```
 
-This runs React smoke tests and Supabase configuration/client tests, strict TypeScript checking, and the production build. `npm run test:watch` runs tests while editing. The tests cover page landmarks, navigation and focus, direct route entry, evidence links, and recovery from an unknown URL. They are DOM-based tests, not a complete browser accessibility audit.
+This runs frontend/auth/profile tests and isolated PostgreSQL migration/RLS tests, strict TypeScript checking, and the production build. Tests do not use live account credentials or change your Supabase project. `npm run test:watch` runs tests while editing. The tests cover page landmarks, navigation and focus, direct route entry, evidence links, and recovery from an unknown URL. They are DOM-based tests, not a complete browser accessibility audit.
 
 To serve the production build locally:
 
@@ -45,7 +45,7 @@ Open http://127.0.0.1:4173. When publishing in a later stage, configure the host
 ## How the files work
 
 - `index.html` loads `src/main.tsx`, which starts React and browser routing.
-- `src/App.tsx` defines the shared header/footer and three routes.
+- `src/App.tsx` defines the shared header/footer and public/auth/profile routes.
 - `src/styles.css` provides responsive styling without an additional UI framework.
 - `vite.config.ts` configures React development/build tooling and Vitest.
 - `src/App.test.tsx` and `src/test/setup.ts` contain smoke-test setup and checks.
@@ -58,7 +58,7 @@ Open http://127.0.0.1:4173. When publishing in a later stage, configure the host
 
 ## Configure your Supabase connection
 
-A blank `.env.local` was created locally and is ignored by Git. Open it in your editor and enter the project URL and publishable key from your Supabase project’s Connect panel:
+Your `.env.local` is configured and ignored by Git. If recreating the setup, enter the project URL and publishable key from your Supabase project’s Connect panel:
 
 ```dotenv
 VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
@@ -69,8 +69,12 @@ Do not use the dashboard URL or an API path such as `/rest/v1`. Save the file an
 
 To recreate the file if it is absent, copy `.env.example` to `.env.local`; do not overwrite existing values. You can verify exclusion with `git check-ignore .env.local`. Full dashboard and authorization steps are in [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 
-## Continue Stage 2 (already authorized; external access required)
+## Finish Stage 2: review and apply migrations
 
-Once the public settings are entered and the migration workflow is agreed, Stage 2 will add Supabase database migrations and a small reference seed, ownership security policies, sign-up/sign-in/recovery, and profile persistence. It will include tests for anonymous access and isolation between two users. See [SPEC.md](SPEC.md) for the approved architecture and schema.
+Read [docs/STAGE_2_REVIEW.md](docs/STAGE_2_REVIEW.md) for the SQL review, exact SQL Editor steps, auth URL settings, and live test checklist. The two migration files are under `supabase/migrations/`. They have not been run on your project by the agent. Never disable RLS or add public access policies to personal tables.
 
-The MVP prioritizes secure accounts, persistence, workout logging, basic recommendations/comparisons, substitutions, and public deployment. Advanced charts, countdown timers, extensive filtering, and a large exercise library are postponed. No live Supabase changes or deployment have been performed by the agent. Stage 3 remains unapproved.
+After applying them, select **Sign in → Create an account**, confirm email, and save your profile. Refresh and sign out/in to verify persistence. The guide explains testing two-account isolation and recovery. `supabase/tests/live_rls.sql` is a separate reviewed, rollback-only verification script, not a migration.
+
+`npm run test:db` runs local security tests; `npm run check:connection` checks live Auth connectivity using only the public settings. Auth unit tests are mocked; local database tests emulate Supabase roles and cannot replace live acceptance checks.
+
+The MVP prioritizes secure accounts, persistence, workout logging, basic recommendations/comparisons, substitutions, and public deployment. Advanced charts, countdown timers, extensive filtering, and a large exercise library are postponed. The agent verified read-only Auth connectivity (HTTP 200); no live Supabase changes or deployment have been performed. Stage 3 remains unapproved.

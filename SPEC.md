@@ -24,7 +24,7 @@ MVP excludes paid AI, nutrition/calorie prescriptions, rehabilitation, medical p
 
 ## 3. Proposed architecture and stack
 
-- **Frontend:** React + TypeScript + Vite, React Router, plain CSS, Supabase JavaScript client, Zod for input validation. A static app is sufficient for the authenticated dashboard and avoids an unnecessary custom server.
+- **Frontend:** React + TypeScript + Vite, React Router, plain CSS, Supabase JavaScript client. Stage 2 uses native form constraints, a tested profile validator, and PostgreSQL constraints; a validation library can be added when later payload complexity justifies it. A static app is sufficient for the authenticated dashboard and avoids an unnecessary custom server.
 - **Backend:** Supabase Auth, its HTTP Data API, and PostgreSQL functions (RPCs) for atomic multi-table operations. This is a real managed backend; browser requests carry the user's access token and database policies enforce ownership.
 - **Database:** Supabase PostgreSQL, versioned SQL migrations, reference-data seeds, constraints, indexes, and row-level security (RLS).
 - **Recommendations:** deterministic, versioned TypeScript rules and curated templates. No AI API or model key required.
@@ -150,7 +150,7 @@ Stage 1 is complete. Stage 2 (database setup, authentication, and security) is n
 These requirements apply to future frontend work, including authentication screens. They do not authorize an unrelated redesign or expand a development stage.
 
 - Create a distinctive, context-specific fitness experience rather than a generic dashboard or interchangeable card template. The working direction is a training journal, with expressive typography and purposeful visual hierarchy; this direction can evolve within the requirements below.
-- Typography: choose beautiful, distinctive, readable typefaces. Avoid Inter, Arial, Roboto, generic system-font-led designs, and defaulting to Space Grotesk. Choose fonts intentionally for this project; retain practical fallback fonts. The Stage 1 shell's Inter/system stack is existing work to revisit during an authorized frontend design pass.
+- Typography: choose beautiful, distinctive, readable typefaces. Avoid Inter, Arial, Roboto, generic system-font-led designs, and defaulting to Space Grotesk. Choose fonts intentionally for this project; retain practical fallback fonts. Stage 2 replaces the Stage 1 Inter/system stack with a serif-led journal direction and uses local font fallbacks without external font requests.
 - Color: commit to a cohesive palette with dominant colors and sharp accents. Define reusable CSS variables. IDE themes and cultural aesthetics may inform the palette. Avoid clichéd purple gradients on white and timid, evenly distributed color schemes.
 - Layout: use proportions, spacing, and composition that reflect training and personal recordkeeping. Avoid predictable, repeated component patterns and cookie-cutter layouts. Keep workout entry clear and efficient on mobile.
 - Backgrounds: build atmosphere and depth through layered gradients, geometric patterns, or contextual treatments instead of relying on flat fills everywhere. Preserve text contrast and readability.
@@ -158,6 +158,10 @@ These requirements apply to future frontend work, including authentication scree
 - Accessibility and function remain acceptance requirements: readable text, contrast, keyboard focus, responsive layout, and reliable forms take priority over decorative effects.
 - Do not treat visual polish as permission to implement postponed charts, countdown timers, extensive filtering, or a large exercise library.
 
-## 15. Stage 2 access checkpoint
+## 15. Stage 2 implementation and review checkpoint
 
-Initial inspection found no exposed Supabase connector, installed Supabase CLI, or configured Supabase access token. The user has since created a project. The frontend SDK and lazy client configuration are now implemented, using only public environment variables; a blank ignored `.env.local` awaits the user’s project URL and publishable key. Stage 2 cannot yet apply migrations or verify real authentication and database isolation. The client configuration is locally testable, but the live project remains unverified. Stop before live operations needing credentials or authorization; do not claim Stage 2 complete. Follow `docs/SUPABASE_SETUP.md` to supply project configuration and select an authorized migration workflow. Never print credential values or commit local environment files. Stage 3 remains unapproved.
+The user created an empty Supabase project, configured the public URL/key locally, and selected the SQL Editor migration workflow. Read-only Auth connectivity passed with HTTP 200; email sign-in and email confirmation are enabled. No credentials were printed and no live users or database records were changed by the agent.
+
+Stage 2 is implemented locally: registration, sign-in/local-browser sign-out, confirmation/recovery routes, protected profile editing, the ten-table schema with RLS, a twelve-exercise seed, and automated frontend/PostgreSQL security tests. Profile rows are created on first save, avoiding a privileged registration trigger. The timestamp trigger uses caller privileges. Workout/recommendation RPCs are intentionally deferred to their feature stages.
+
+The exact migration files are tested in isolated PGlite PostgreSQL with minimal Supabase identity emulation. This adds a development-only test dependency; it is not an application database or a replacement for hosted Supabase. Review `docs/STAGE_2_REVIEW.md`, apply each SQL file manually only after review, then verify real authentication, profile persistence, and live permissions. A separate SQL verification script uses client roles and rolls back its temporary data. Stage 2 remains incomplete until live acceptance passes. Stage 3 remains unapproved. All file access and project writes for this stage stay inside `~/fitness-app`.

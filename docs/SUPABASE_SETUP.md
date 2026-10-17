@@ -1,6 +1,6 @@
 # Stage 2: Supabase account setup
 
-Status: the user has created a Supabase project. The SDK and client configuration are implemented locally, and a blank Git-ignored `.env.local` is available. The agent has not connected to or changed the live project. SQL migrations and authentication implementation are still pending.
+Status: the user has created an empty Supabase project and configured `.env.local`. Read-only Auth connectivity passed (HTTP 200). Auth/profile features, migrations, seed, and local security tests are implemented; live SQL execution and acceptance tests are pending. See [STAGE_2_REVIEW.md](STAGE_2_REVIEW.md) for the current review and handoff.
 
 ## 1. Create or choose a project
 
@@ -17,7 +17,7 @@ VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-These are browser configuration, not administrative credentials. `.env.local` is ignored by Git. Never place a service-role key, secret API key, database password, or Supabase personal access token in a `VITE_` variable. The frontend reads these values now and displays configuration status. Restart Vite after changing them. Configuration-loaded status is not a live connection test. The client is created lazily when an authenticated feature needs it.
+These are browser configuration, not administrative credentials. `.env.local` is ignored by Git. Never place a service-role key, secret API key, database password, or Supabase personal access token in a `VITE_` variable. The frontend reads these values now and displays configuration status. Restart Vite after changing them. Configuration-loaded status is not a live connection test. The auth provider creates the client to restore and track the browser session; configuration status alone is not proof of a successful login.
 
 ## 3. Choose how database migrations will be applied
 
@@ -43,7 +43,7 @@ http://127.0.0.1:5173/auth/callback
 http://127.0.0.1:5173/auth/reset-password
 ```
 
-Those pages are planned, not implemented yet. Use the same `127.0.0.1` origin in the browser; `localhost` is a different origin and needs separate configuration if used. For public deployment later, replace the Site URL with the production HTTPS origin and add that origin's exact callback/reset paths. Avoid broad production wildcard redirects.
+Those routes are implemented now. Use the same `127.0.0.1` origin in the browser; `localhost` is a different origin and needs separate configuration if used. For public deployment later, replace the Site URL with the production HTTPS origin and add that origin's exact callback/reset paths. Avoid broad production wildcard redirects.
 
 Supabase's default email service restricts delivery and is unsuitable for public production use. For public sign-up and recovery, configure custom SMTP under Authentication with your email provider's verified sender/domain and credentials. Enter SMTP secrets in Supabase, not in frontend files or chat. For initial testing without custom SMTP, use permitted project-team recipient addresses and observe provider rate limits; do not disable email confirmation as a shortcut.
 
@@ -71,4 +71,4 @@ Documentation checked 2026-10-17. Dashboard labels can change; use the linked of
 
 ## Current handoff
 
-After entering the public values locally, tell the agent they are ready; do not paste the file contents in chat. Confirm whether the project is empty and choose the dashboard SQL workflow or authorize a connected integration. Preparing local code and migration files is within Stage 2 authorization; running SQL against your project, changing account settings, or making live test-user/data changes must wait for the appropriate access and authorization.
+The dashboard SQL workflow is selected. Review [STAGE_2_REVIEW.md](STAGE_2_REVIEW.md) and the two migration files before running anything in SQL Editor. No privileged keys are needed by the frontend. Live database changes remain under your control. Stage 3 is unapproved.
