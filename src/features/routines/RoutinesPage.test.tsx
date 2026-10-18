@@ -46,7 +46,7 @@ test('custom creation and existing-routine editing are available', async () => {
   expect(screen.getByLabelText('Routine name')).toHaveValue(testDocument.name)
   await user.click(screen.getByRole('button', { name: 'Save routine' }))
   expect(mocks.save).toHaveBeenCalledWith(mocks.client, saved.id, expect.any(Object), expect.any(String), saved.updated_at)
-  await user.click(screen.getByRole('button', { name: 'Create a routine' }))
+  await user.click(screen.getByRole('button', { name: 'Create routine' }))
   expect(screen.getByLabelText('Routine name')).toHaveValue('My routine')
 })
 
@@ -66,7 +66,7 @@ test('load failures are actionable and retryable', async () => {
   page()
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load routines')
   await userEvent.click(screen.getByRole('button', { name: 'Retry loading routines' }))
-  expect(await screen.findByRole('heading', { name: 'Your saved routines' })).toBeVisible()
+  expect(await screen.findByRole('heading', { name: 'My routines' })).toBeVisible()
 })
 
 test('remounting reloads saved routines instead of reading an in-browser cache', async () => {
@@ -83,7 +83,7 @@ test('missing fitness profile links to setup and does not generate default recom
   mocks.load.mockResolvedValue({ ...workspace(), profile: null })
   page()
   expect(await screen.findByRole('link', { name: 'fitness profile' })).toHaveAttribute('href', '/profile')
-  expect(screen.queryByText('Suggested starting points')).not.toBeInTheDocument()
+  expect(screen.queryByText('Recommended')).not.toBeInTheDocument()
 })
 
 

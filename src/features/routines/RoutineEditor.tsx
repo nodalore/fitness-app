@@ -38,8 +38,8 @@ export function RoutineEditor({ initial, catalog, profile, onSave, onCancel }: P
     finally { setBusy(false) }
   }
   return <section className="routine-editor" aria-labelledby="editor-title">
-    <p className="eyebrow">PLAN WORKSHOP</p><h2 id="editor-title">Edit your routine</h2>
-    <p>Adjust the starting prescription to fit your training. Rest is in seconds. Choosing another exercise resets its prescription to the suggested defaults. A routine with logged sessions is saved as a new version to preserve history.</p>
+    <p className="eyebrow">CUSTOMIZE</p><h2 id="editor-title">Edit your routine</h2>
+    <p>Set your reps, sets, and rest (seconds). Changing an exercise resets its targets. Edits to logged routines create a new version to protect history.</p>
     <form onSubmit={submit} onChange={() => setError('')}>
       <fieldset disabled={busy} className="editor-fields"><legend className="sr-only">Routine details</legend>
         <div className="form-columns"><label>Routine name<input required maxLength={100} value={document.name} onChange={event => setDocument({ ...document, name: event.target.value })} /></label>
