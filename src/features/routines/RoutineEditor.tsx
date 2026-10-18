@@ -1,78 +1,144 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { weekdays, type ProfileDraft } from '../profile/profile'
-import { ExerciseInfo } from './ExerciseInfo'
-import { compatible, prescription } from './recommendations'
-import { validateRoutine } from './routineValidation'
-import type { Exercise, Prescription, RoutineDayDraft, RoutineDocument } from './types'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { ProfileDraft } from '../profile/profile'
+import { validateExercise, validateRoutine } from './routineValidation'
+import { blankExercise, type Exercise, type PerSetPrescription, type Prescription, type RoutineDayDraft, type RoutineDocument, type PlannedSet } from './types'
 
 type Props = {
-  initial: RoutineDocument; catalog: Exercise[]; profile: ProfileDraft;
+  initial: RoutineDocument; catalog: Exercise[]; profile?: ProfileDraft | null; editingExisting?: boolean;
   onSave: (document: RoutineDocument, requestId: string) => Promise<void>; onCancel: () => void;
 }
-export function RoutineEditor({ initial, catalog, profile, onSave, onCancel }: Props) {
+type EditorDay = {
+  day: RoutineDayDraft;
+  // This input buffer is not a routine exercise until Add Exercise or Save.
+  composer: PerSetPrescription;
+  selected: number | null;
+}
+const LB_PER_KG = 2.20462262185
+const hasInput = (item: PerSetPrescription) => Boolean(item.exercise_id || item.custom_exercise_name || item.notes || item.planned_sets.length)
+
+export function RoutineEditor({ initial, catalog, profile, editingExisting = false, onSave, onCancel }: Props) {
   const [document, setDocument] = useState(() => structuredClone(initial))
+  const [days, setDays] = useState<EditorDay[]>(() => initial.days.map(day => ({
+    day: structuredClone(day), composer: blankExercise(), selected: day.exercises.length ? 0 : null,
+  })))
+  const [dayIndex, setDayIndex] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true })
+    const main = titleRef.current?.closest('main')
+    if (main) main.scrollTop = 0
+  }, [])
   const retry = useRef<{ json: string; requestId: string } | null>(null)
-  function changeDay(index: number, next: RoutineDayDraft) {
-    setDocument({ ...document, days: document.days.map((day, i) => i === index ? next : day) })
+  const current = days[dayIndex]
+  const { day, selected, composer } = current
+  const item = selected === null ? composer : day.exercises[selected]
+  const selectedExercise = item.exercise_id ? catalog.find(entry => entry.id === item.exercise_id) : null
+  const unit: 'kg' | 'lb' = profile?.display_unit === 'lb' ? 'lb' : 'kg'
+  const nameOf = (item: Prescription) => item.exercise_id
+    ? catalog.find(entry => entry.id === item.exercise_id)?.name ?? 'Library exercise unavailable'
+    : item.custom_exercise_name ?? ''
+
+  function updateCurrent(next: EditorDay) { setDays(days.map((entry, i) => i === dayIndex ? next : entry)) }
+  function changeDay(patch: Partial<RoutineDayDraft>) { updateCurrent({ ...current, day: { ...day, ...patch } }) }
+  function changeExercise(next: Prescription) {
+    if (selected === null) updateCurrent({ ...current, composer: next as PerSetPrescription })
+    else changeDay({ exercises: day.exercises.map((entry, i) => i === selected ? next : entry) })
   }
-  function changeExercise(dayIndex: number, index: number, patch: Partial<Prescription>) {
-    const day = document.days[dayIndex]
-    changeDay(dayIndex, { ...day, exercises: day.exercises.map((item, i) => i === index ? { ...item, ...patch } : item) })
+  function changeSet(index: number, patch: Partial<PlannedSet>) {
+    if (item.planning_mode !== 'per_set') return
+    changeExercise({ ...item, planned_sets: item.planned_sets.map((entry, i) => i === index ? { ...entry, ...patch } : entry) })
   }
-  function move<T>(list: T[], index: number, offset: number) {
-    const next = [...list]
-    ;[next[index], next[index + offset]] = [next[index + offset], next[index]]
-    return next
+  function moveExercise(offset: number) {
+    if (selected === null) return
+    const exercises = [...day.exercises]
+    ;[exercises[selected], exercises[selected + offset]] = [exercises[selected + offset], exercises[selected]]
+    updateCurrent({ ...current, day: { ...day, exercises }, selected: selected + offset })
+  }
+  function addExercise() {
+    const validation = validateExercise(item, catalog)
+    if (validation) { setError(validation); return }
+    if (selected !== null) {
+      // Existing entries are edited in place in the local draft, never appended again.
+      updateCurrent({ ...current, selected: null })
+    } else {
+      if (day.exercises.length >= 20) { setError('Use at most 20 exercises per day.'); return }
+      updateCurrent({ ...current, day: { ...day, exercises: [...day.exercises, structuredClone(composer)] }, composer: blankExercise(), selected: null })
+    }
+    setError('')
+  }
+  function removeExercise() {
+    if (selected === null) return
+    const exercises = day.exercises.filter((_, i) => i !== selected)
+    updateCurrent({ ...current, day: { ...day, exercises }, selected: exercises.length ? Math.min(selected, exercises.length - 1) : null })
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy) return
-    const validation = validateRoutine(document, catalog)
+    // Save includes a last typed exercise, but never a pristine empty input buffer.
+    const ready: RoutineDocument = { ...document, days: days.map(({ day, composer }) => ({
+      ...day, exercises: hasInput(composer) ? [...day.exercises, composer] : [...day.exercises],
+    })) }
+    const validation = validateRoutine(ready, catalog)
     if (validation) { setError(validation); return }
-    const json = JSON.stringify(document)
+    const json = JSON.stringify(ready)
     if (retry.current?.json !== json) retry.current = { json, requestId: crypto.randomUUID() }
     setBusy(true); setError('')
-    try { await onSave(document, retry.current!.requestId) }
-    catch (error) { setError(error instanceof Error ? error.message : 'Routine was not saved. Retry when your connection is available.') }
+    try { await onSave(structuredClone(ready), retry.current!.requestId) }
+    catch (error) { setError(error instanceof Error ? error.message : 'Routine was not saved. Your draft is kept.') }
     finally { setBusy(false) }
   }
-  return <section className="routine-editor" aria-labelledby="editor-title">
-    <p className="eyebrow">CUSTOMIZE</p><h2 id="editor-title">Edit your routine</h2>
-    <p>Set your reps, sets, and rest (seconds). Changing an exercise resets its targets. Edits to logged routines create a new version to protect history.</p>
+
+  return <section className="routine-editor focused-editor" aria-labelledby="editor-title">
+    <p className="eyebrow">PLAN BUILDER</p><h2 id="editor-title" ref={titleRef} tabIndex={-1}>{editingExisting ? 'Edit routine' : 'Build your routine'}</h2>
+    <p className="field-note">Planned targets only · no completed workouts</p>
+    {editingExisting && <p className="field-note">Changes update this routine. Plans linked to workout history are saved as a new version; the original stays archived.</p>}
     <form onSubmit={submit} onChange={() => setError('')}>
       <fieldset disabled={busy} className="editor-fields"><legend className="sr-only">Routine details</legend>
-        <div className="form-columns"><label>Routine name<input required maxLength={100} value={document.name} onChange={event => setDocument({ ...document, name: event.target.value })} /></label>
-          <label>Routine goal<select value={document.goal} onChange={event => setDocument({ ...document, goal: event.target.value })}><option value="general_fitness">General fitness</option><option value="strength">Strength</option><option value="muscle_growth">Muscle growth</option></select></label></div>
-        {document.days.map((day, dayIndex) => <fieldset key={dayIndex} className="day-editor"><legend>Workout {dayIndex + 1}</legend>
-          <div className="form-columns"><label>Workout {dayIndex + 1} name<input required maxLength={100} value={day.name} onChange={event => changeDay(dayIndex, { ...day, name: event.target.value })} /></label>
-            <label>Workout {dayIndex + 1} weekday (optional)<select value={day.weekday ?? ''} onChange={event => changeDay(dayIndex, { ...day, weekday: event.target.value === '' ? null : Number(event.target.value) })}><option value="">Unscheduled</option>{weekdays.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label></div>
-          <div className="inline-actions"><button type="button" className="secondary-button" disabled={dayIndex === 0} onClick={() => setDocument({ ...document, days: move(document.days, dayIndex, -1) })}>Move workout up</button><button type="button" className="secondary-button" onClick={() => setDocument({ ...document, days: document.days.filter((_, index) => index !== dayIndex) })}>Remove workout</button></div>
-          {day.exercises.map((item, exerciseIndex) => {
-            const exercise = catalog.find(entry => entry.id === item.exercise_id)
-            const label = `Workout ${dayIndex + 1}, exercise ${exerciseIndex + 1}`
-            return <div className="exercise-editor" key={exerciseIndex}>
-              <label>{label}<select value={item.exercise_id} onChange={event => {
-                const chosen = catalog.find(entry => entry.id === event.target.value)!
-                changeExercise(dayIndex, exerciseIndex, prescription(chosen, { ...profile, goal: document.goal }))
-              }}>{catalog.map(entry => <option key={entry.id} value={entry.id}>{entry.name}{compatible(entry, profile) ? '' : ' · other equipment'}</option>)}</select></label>
-              <div className="exercise-note">{exercise && <ExerciseInfo exercise={exercise} />} {exercise && !compatible(exercise, profile) ? 'This exercise needs equipment not selected in your profile.' : ''}</div>
-              <div className="prescription-fields">{([
-                ['Sets', 'target_sets', 10], ['Minimum reps', 'rep_min', 100], ['Maximum reps', 'rep_max', 100], ['Rest seconds', 'rest_seconds', 900],
-              ] as const).map(([name, field, max]) => <label key={field}>{name}<input aria-label={`${label}: ${name}`} type="number" min={1} max={max} step={1} required value={item[field]} onChange={event => changeExercise(dayIndex, exerciseIndex, { [field]: Number(event.target.value) })} /></label>)}</div>
-              <label>Exercise notes<textarea aria-label={`${label}: Notes`} maxLength={2000} value={item.notes} onChange={event => changeExercise(dayIndex, exerciseIndex, { notes: event.target.value })} /></label>
-              <div className="inline-actions"><button type="button" className="secondary-button" disabled={exerciseIndex === 0} onClick={() => changeDay(dayIndex, { ...day, exercises: move(day.exercises, exerciseIndex, -1) })}>Move exercise up</button><button type="button" className="secondary-button" onClick={() => changeDay(dayIndex, { ...day, exercises: day.exercises.filter((_, index) => index !== exerciseIndex) })}>Remove exercise</button></div>
-            </div>
-          })}
-          <button type="button" className="secondary-button" disabled={!catalog.length || day.exercises.length >= 20} onClick={() => {
-            const exercise = catalog.find(entry => compatible(entry, profile)) ?? catalog[0]
-            changeDay(dayIndex, { ...day, exercises: [...day.exercises, prescription(exercise, { ...profile, goal: document.goal })] })
-          }}>Add exercise to workout {dayIndex + 1}</button>
-        </fieldset>)}
-        <div className="inline-actions"><button type="button" className="secondary-button" disabled={document.days.length >= 7} onClick={() => setDocument({ ...document, days: [...document.days, { name: `Workout ${document.days.length + 1}`, weekday: null, exercises: [] }] })}>Add workout day</button><button type="submit">{busy ? 'Saving routine…' : 'Save routine'}</button><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button></div>
-      </fieldset>
-      <p role="alert">{error}</p>
+        <label>Routine name<input maxLength={100} value={document.name} onChange={e => setDocument({ ...document, name: e.target.value })} /></label>
+        <div className="session-switcher" role="group" aria-label="Day selection">{days.map((_, index) => <button key={index} type="button" aria-pressed={dayIndex === index} className="secondary-button" onClick={() => { setDayIndex(index); setError('') }}>Day {index + 1}</button>)}</div>
+        <div className="session-workspace">
+          <label>Workout/session name<input maxLength={100} placeholder="e.g., Back and Biceps" value={day.name} onChange={e => changeDay({ name: e.target.value })} /></label>
+          <div className="compact-actions"><button type="button" className="text-button" disabled={dayIndex === 0} onClick={() => {
+            const next = [...days]; [next[dayIndex - 1], next[dayIndex]] = [next[dayIndex], next[dayIndex - 1]]
+            setDays(next); setDayIndex(dayIndex - 1)
+          }}>Move day up</button><button type="button" className="text-button" disabled={days.length === 1} onClick={() => { setDays(days.filter((_, i) => i !== dayIndex)); setDayIndex(Math.max(0, dayIndex - 1)) }}>Remove day</button></div>
+          {day.exercises.length > 0 && <ol className="exercise-outline" aria-label="Added exercises">{day.exercises.map((entry, index) => <li key={index}><button className="text-button" type="button" aria-pressed={selected === index} onClick={() => updateCurrent({ ...current, selected: index })}><span className="number">{String(index + 1).padStart(2, '0')}</span>{nameOf(entry)}</button></li>)}</ol>}
+          <div className="active-exercise" key={`${dayIndex}-${selected ?? 'composer'}`}>
+            <h3 className="exercise-form-title">Exercise {(selected ?? day.exercises.length) + 1}</h3>
+            {item.planning_mode !== 'per_set' && <p className="field-note">Changing this exercise clears its saved range. Leave it unchanged to preserve the original targets.</p>}
+            <label>Exercise name<input maxLength={100} value={nameOf(item)} onChange={e => {
+              if (item.planning_mode === 'per_set') changeExercise({ ...item, exercise_id: null, custom_exercise_name: e.target.value })
+              else changeExercise({ ...blankExercise(e.target.value), notes: item.notes })
+            }} /></label>
+            <details className="catalog-picker"><summary>Choose from library</summary><label>Library exercise<select value={item.exercise_id ?? ''} onChange={e => { if (e.target.value) changeExercise({ ...blankExercise('', e.target.value), notes: item.notes }) }}><option value="">Select explicitly</option>{catalog.filter(entry => !entry.deprecated_at || entry.id === item.exercise_id).map(entry => <option key={entry.id} value={entry.id}>{entry.name}{entry.deprecated_at ? ' (retired)' : ''}</option>)}</select></label></details>
+            {selectedExercise?.loading_mode === 'per_implement' && <p className="field-note">Planned weight is per dumbbell / implement.</p>}
+            {selectedExercise?.slug.startsWith('band-') && <p className="field-note">Describe the band and setup in notes; leave weight unset.</p>}
+            {item.planning_mode === 'per_set' ? <>
+              <label>Number of sets<input type="number" min={0} max={10} step={1} value={item.planned_sets.length} onChange={e => {
+                const count = Math.max(0, Math.min(10, Number(e.target.value)))
+                if (!Number.isInteger(count)) return
+                changeExercise({ ...item, planned_sets: Array.from({ length: count }, (_, i) => item.planned_sets[i] ?? { reps: null, load_kg: null, entered_unit: unit }) })
+              }} /></label>
+              <div className="planned-sets">{item.planned_sets.map((set, index) => <div className="planned-set" key={index}>
+                <span className="set-number">{String(index + 1).padStart(2, '0')}</span>
+                <label>Reps<input aria-label={`Set ${index + 1} reps`} type="number" min={1} max={100} step={1} placeholder="Unset" value={set.reps ?? ''} onChange={e => changeSet(index, { reps: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+                <label>Planned weight<input aria-label={`Set ${index + 1} planned weight`} type="number" min={0} max={set.entered_unit === 'lb' ? 22046.2262185 : 10000} step="any" placeholder="Unset" value={set.load_kg == null ? '' : Number((set.load_kg * (set.entered_unit === 'lb' ? LB_PER_KG : 1)).toFixed(6))} onChange={e => changeSet(index, { load_kg: e.target.value === '' ? null : Number(e.target.value) / (set.entered_unit === 'lb' ? LB_PER_KG : 1) })} /></label>
+                <label className="set-unit">Unit<select aria-label={`Set ${index + 1} unit`} value={set.entered_unit} onChange={e => changeSet(index, { entered_unit: e.target.value as 'kg' | 'lb' })}><option value="kg">kg</option><option value="lb">lb</option></select></label>
+                <button type="button" className="text-button" aria-label={`Remove set ${index + 1}`} onClick={() => changeExercise({ ...item, planned_sets: item.planned_sets.filter((_, i) => i !== index) })}>×</button>
+              </div>)}</div>
+              <button type="button" className="secondary-button" disabled={item.planned_sets.length >= 10} onClick={() => changeExercise({ ...item, planned_sets: [...item.planned_sets, { reps: null, load_kg: null, entered_unit: unit }] })}>Add Set</button>
+            </> : <div className="legacy-targets"><p>Saved range: {item.target_sets} sets · {item.rep_min}–{item.rep_max} reps · {item.rest_seconds}s rest</p><p className="field-note">Kept unchanged. Switching to per-set targets clears this range; enter your own targets.</p><button className="secondary-button" type="button" onClick={() => changeExercise({ ...blankExercise('', item.exercise_id), notes: item.notes })}>Set individual targets</button></div>}
+            <details><summary>Exercise notes</summary><label>Notes<textarea maxLength={2000} value={item.notes} onChange={e => changeExercise({ ...item, notes: e.target.value })} /></label></details>
+            {selected !== null && <div className="compact-actions"><button type="button" className="text-button" disabled={selected === 0} onClick={() => moveExercise(-1)}>Move exercise up</button><button type="button" className="text-button" disabled={selected === day.exercises.length - 1} onClick={() => moveExercise(1)}>Move exercise down</button><button type="button" className="text-button" onClick={removeExercise}>Remove exercise</button></div>}
+          </div>
+          <div className="inline-actions"><button className="secondary-button" type="button" disabled={selected === null && day.exercises.length >= 20} onClick={addExercise}>{selected === null ? 'Add Exercise' : 'Done Editing Exercise'}</button>
+            {selected !== null && hasInput(composer) && <button type="button" className="text-button" onClick={() => updateCurrent({ ...current, selected: null })}>Continue unfinished exercise</button>}
+            <button type="button" className="secondary-button" disabled={days.length >= 7} onClick={() => { setDays([...days, { day: { name: '', weekday: null, exercises: [] }, composer: blankExercise(), selected: null }]); setDayIndex(days.length); setError('') }}>Add Day</button></div>
+        </div>
+        <div className="editor-save-bar"><button type="submit">{busy ? 'Saving routine…' : editingExisting ? 'Save Changes' : 'Save Routine'}</button><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button></div>
+      </fieldset><p role="alert">{error}</p>
     </form>
   </section>
 }

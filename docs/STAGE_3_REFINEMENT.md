@@ -1,3 +1,5 @@
+> Historical milestone guide. Migrations 001–006 are treated as installed/immutable for current work; do not follow old installation instructions below. Current Stage 3 routine planning, local migration 007 review and remaining acceptance gates are documented in [MILESTONE_2.md](MILESTONE_2.md). Hosted 007 still needs separate approval.
+
 # Stage 3 refinement — local review and acceptance
 
 Status: local implementation complete; hosted acceptance pending. The user confirms original migrations 001–003 are installed. Do not rerun them. No hosted database changes were made by the agent. Stage 4 remains unstarted.

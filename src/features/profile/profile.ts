@@ -2,6 +2,7 @@ export const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
 export const equipmentOptions = ['bodyweight', 'dumbbell', 'barbell', 'machine', 'band']
 export const equipmentDetails = { bench: 'Bench', rack: 'Squat rack + safeties', leg_press: 'Leg press', lat_pulldown: 'Lat pulldown', leg_curl: 'Leg curl', cable_station: 'Cable station', calf_machine: 'Calf raise machine', chest_press: 'Chest press machine', seated_row: 'Seated row machine', shoulder_press: 'Shoulder press machine', stable_support: 'Stable row support', band_anchor: 'Secure band anchor + attachments', pull_up_bar: 'Pull-up bar' }
 export type ProfileDraft = {
+  gender?: string | null
   display_name: string
   goal: string
   experience: string
@@ -14,7 +15,7 @@ export type ProfileDraft = {
   equipment_details?: string[]
 }
 export const defaultProfile: ProfileDraft = {
-  display_name: '', goal: 'general_fitness', experience: 'beginner', available_weekdays: [1, 3],
+  gender: null, display_name: '', goal: 'general_fitness', experience: 'beginner', available_weekdays: [1, 3],
   timeline_weeks: 8, equipment: ['bodyweight'], display_unit: 'kg', timezone: 'UTC', training_days_per_week: 3, equipment_details: [],
 }
 
@@ -48,7 +49,7 @@ export function validateProfile(profile: ProfileDraft, requireFrequency = false)
 // Read every schema version without inventing an explicit frequency preference.
 export function normalizeProfile(value: ProfileDraft): ProfileDraft {
   return {
-    display_name: value.display_name, goal: value.goal, experience: value.experience,
+    gender: value.gender ?? null, display_name: value.display_name, goal: value.goal, experience: value.experience,
     available_weekdays: value.available_weekdays, timeline_weeks: value.timeline_weeks,
     equipment: value.equipment, display_unit: value.display_unit, timezone: value.timezone,
     training_days_per_week: value.training_days_per_week ?? null,
@@ -58,4 +59,21 @@ export function normalizeProfile(value: ProfileDraft): ProfileDraft {
 export function legacyFrequencySuggestion(profile: ProfileDraft): number | null {
   const count = new Set(profile.available_weekdays.filter(day => Number.isInteger(day) && day >= 0 && day <= 6)).size
   return count >= 2 && count <= 6 ? count : null
+}
+
+export const genderOptions = { woman: 'Woman', man: 'Man', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say' }
+
+// Only these fields belong to the simplified form. Never spread a loaded row
+// into a write: hidden preferences may have changed in another browser.
+export function profilePatch(profile: ProfileDraft, userId: string) {
+  return { user_id: userId, display_name: profile.display_name.trim(), gender: profile.gender,
+    goal: profile.goal, experience: profile.experience,
+    training_days_per_week: profile.training_days_per_week, timezone: detectTimezone() }
+}
+export function validateProfileForm(profile: ProfileDraft): string | null {
+  if (!Object.hasOwn(genderOptions, profile.gender ?? '')) return 'Choose your gender, including Prefer not to say.'
+  // Reuse established validation with defaults for fields this form cannot edit.
+  return validateProfile({ ...defaultProfile, display_name: profile.display_name,
+    goal: profile.goal, experience: profile.experience,
+    training_days_per_week: profile.training_days_per_week, timezone: detectTimezone() }, true)
 }

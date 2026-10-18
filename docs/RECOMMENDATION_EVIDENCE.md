@@ -1,3 +1,16 @@
+# Current rules-3.0 changes — October 18, 2026
+
+Milestone 2 supersedes the rules-2.0 choices recorded below. The cited research remains the evidence register; no new numerical prescription or claim of a validated personal optimum was added.
+
+- One deterministic exercise plan uses only goal, experience and requested 2–6 sessions, across all experience levels. Name/gender, equipment inventory/support, units, timeline, weekdays and timezone are excluded from both selection and saved recommendation assumptions.
+- Actual loaded catalog rows only; deprecated and skill-inappropriate entries are filtered. Equipment requirements remain factual labels; availability is unknown, never assumed. Catalog coverage gaps are disclosed instead of inventing an exercise ID.
+- Full body (2–3), upper/lower (4), upper/lower plus push/pull/legs (5) and push/pull/legs A/B (6) are practical app choices. Higher beginner frequency gets a recovery limitation, not an undisclosed reduction in sessions or fabricated workload. These splits are not individual optima established by the papers.
+- Existing suitability metadata ranks loadable exercises by goal/skill; A/B variation uses occurrence within session families, with stable strength anchors and changed order/emphasis. No randomness or gender assumptions.
+- New sets/reps/rest/weights are **unset**. Users configure their own optional per-set targets. There are no known weekly set totals or volume audits until actual targets exist. Historical v1 prescriptions remain readable and are not regenerated. Rules-2.0 volume/default/three-option descriptions below are historical only.
+- The latest user request removes exercise photographs. Recommendation explanations are original short text only; exercise selection is unchanged. Create My Own Routine does not infer exercise descriptions or media from free text. Earlier photo sourcing/coverage requirements are withdrawn.
+
+---
+
 # Recommendation evidence register — rules-2.0
 
 Reviewed October 18, 2026. Healthy-adult education, not individualized coaching or medical advice. The software does not measure strength, movement skill, fatigue, or recovery. An “advanced” profile changes exercise ranking and starting workload, never assigns a weight or proves a person needs more volume.

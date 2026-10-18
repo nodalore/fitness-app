@@ -38,6 +38,7 @@ beforeAll(async () => {
   expect(training_days_per_week).toBeNull(); expect(equipment_details).toBeNull()
   const oldCatalog = (await db.query('select * from exercises order by id')).rows
   await migration('202610180005_catalog_expansion.sql')
+  await migration('202610180006_profile_gender.sql')
   expect((await db.query("select * from exercises where id < '20000000-0000-4000-8000-000000000013' order by id")).rows).toEqual(oldCatalog)
 }, 30000)
 afterAll(async () => { await db?.close() })
@@ -82,14 +83,31 @@ test('expanded reference data remains read-only to browser roles', async () => {
     await expect(asUser(role,"delete from evidence_sources")).rejects.toThrow(/permission denied/)
   }
 })
-test('all goal/experience/frequency plans from actual upgraded SQL save through installed RPC', async () => {
+test('all goal/experience/frequency plans use actual upgraded catalog records', async () => {
   const catalog = (await db.query<Exercise>('select * from exercises')).rows
   for (const goal of ['general_fitness','strength','muscle_growth']) for (const experience of ['beginner','intermediate','advanced']) for (const count of [2,3,4,5,6]) {
     const result = recommendRoutines({ ...defaultProfile, goal, experience, training_days_per_week:count, equipment:['dumbbell','barbell','machine','band'], equipment_details:Object.keys(equipmentDetails) },catalog)
-    expect(result.options).toHaveLength(3)
+    expect(result.options).toHaveLength(1)
     for (const option of result.options) {
-      const id = crypto.randomUUID()
-      await asUser(A,'select fitness_save_routine($1,$2::jsonb,$3,null)',[id,JSON.stringify(option.document),crypto.randomUUID()])
+      for (const day of option.document.days) for (const item of day.exercises) expect(catalog.some(exercise => exercise.id === item.exercise_id)).toBe(true)
     }
   }
+})
+
+
+test('gender upgrade preserves legacy NULL and narrow writes preserve hidden profile data', async () => {
+  const before = (await db.query<Record<string, unknown>>('select * from profiles where user_id=$1', [A])).rows[0]
+  expect(before.gender).toBeNull()
+  const { rows } = await asUser(A, "update profiles set display_name='New name',gender='prefer_not_to_say',goal='strength',experience='advanced',training_days_per_week=4,timezone='UTC' where user_id=$1 returning *", [A])
+  for (const field of ['available_weekdays','timeline_weeks','equipment','equipment_details','display_unit','onboarding_completed_at','created_at']) expect(rows[0][field]).toEqual(before[field])
+})
+test.each(['woman','man','non_binary','prefer_not_to_say',null])('gender accepts explicit choice or untouched legacy NULL: %s', async gender => {
+  const { rows } = await asUser(A, 'update profiles set gender=$1 where user_id=$2 returning gender', [gender,A])
+  expect(rows[0].gender).toBe(gender)
+})
+test('gender constraint and existing owner policies reject invalid and foreign writes', async () => {
+  await expect(asUser(A, "update profiles set gender='invalid' where user_id=$1", [A])).rejects.toThrow()
+  expect((await asUser(B, "update profiles set gender='man' where user_id=$1 returning *", [A])).rows).toHaveLength(0)
+  await expect(asUser(null, 'select gender from profiles')).rejects.toThrow(/permission denied/)
+  await expect(asUser(B, "insert into profiles(user_id,gender) values ($1,'woman')", [A])).rejects.toThrow()
 })

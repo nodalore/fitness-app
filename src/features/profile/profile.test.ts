@@ -1,4 +1,4 @@
-import { defaultProfile, validateProfile, legacyFrequencySuggestion, normalizeProfile } from './profile'
+import { defaultProfile, validateProfile, legacyFrequencySuggestion, normalizeProfile, validateProfileForm } from './profile'
 
 test('default profile is valid', () => expect(validateProfile(defaultProfile)).toBeNull())
 test.each([
@@ -30,4 +30,11 @@ test('normalization preserves profile inputs but excludes server-only fields and
   expect(result.available_weekdays).toEqual([1,1,3])
   expect(result).not.toHaveProperty('updated_at')
   expect(legacyFrequencySuggestion(result)).toBe(2)
+})
+
+test.each(['woman','man','non_binary','prefer_not_to_say'])('simplified form accepts %s without validating hidden stale values', gender => {
+  expect(validateProfileForm({ ...defaultProfile, gender, equipment: [], available_weekdays: [], timeline_weeks: 0, display_unit: 'stale' })).toBeNull()
+})
+test.each([undefined, null, '', 'invalid'])('simplified form requires a valid explicit gender: %s', gender => {
+  expect(validateProfileForm({ ...defaultProfile, gender })).toContain('Choose your gender')
 })

@@ -12,3 +12,8 @@ coverage/
 .playwright-mcp/
 .reference.png
 preview-*.png
+
+# Public image provenance research; approved assets live in public/images/exercises.
+.asset-review/
+.wger-*.json
+.wger-*.html

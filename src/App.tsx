@@ -70,7 +70,7 @@ function AccountNavigation() {
 }
 
 function AppShell() {
-  const { pathname, hash } = useLocation()
+  const { pathname, hash, key } = useLocation()
   const { session } = useAuth()
   const mainRef = useRef<HTMLElement>(null)
   const previousPath = useRef(pathname)
@@ -84,11 +84,23 @@ function AppShell() {
   }, [pathname])
 
   useEffect(() => {
-    if (!hash) return
-    const target = document.getElementById(hash.slice(1))
-    target?.scrollIntoView?.({ behavior: 'instant' })
-    target?.focus()
-  }, [pathname, hash])
+    if (!hash) {
+      if (mainRef.current) mainRef.current.scrollTop = 0
+      return
+    }
+    const reveal = () => {
+      const target = document.getElementById(hash.slice(1))
+      if (!target) return false
+      target.scrollIntoView?.({ behavior: 'instant' })
+      target.focus({ preventScroll: true })
+      return true
+    }
+    if (reveal()) return
+    // Lazy route content may not have mounted when the location changes.
+    const observer = new MutationObserver(() => { if (reveal()) observer.disconnect() })
+    if (mainRef.current) observer.observe(mainRef.current, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [pathname, hash, key])
   const links = session ? [
     { to: '/dashboard', label: 'Dashboard', icon: 'grid' as const },
     { to: '/routines', label: 'Discover', icon: 'compass' as const },
@@ -98,8 +110,7 @@ function AppShell() {
   return <div className={`app ${session ? 'has-account' : ''}`}>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="header"><Link className="brand" to={session ? '/dashboard' : '/'} aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true"><Icon name="strength" /></span> Fitness App<span className="brand-dot">.</span></Link><nav aria-label="Main navigation">{!session && <NavLink to="/" end>Home</NavLink>}<NavLink to="/about">Our approach</NavLink><AccountNavigation /></nav></header>
-    {session && <aside className="app-sidebar"><p className="eyebrow">TRAINING</p><nav aria-label="Your training">{links.map(link => <Link key={link.to} to={link.to} aria-current={`${pathname}${hash}` === link.to ? 'page' : undefined}><Icon name={link.icon} /><span>{link.label}</span></Link>)}</nav><div className="sidebar-note"><span className="eyebrow">STAY CONSISTENT</span><p>Show up.<br />Put in the work.</p><Link to="/about">Training guide ↗</Link></div></aside>}
-    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/dashboard" element={<Suspense fallback={<p role="status">Loading dashboard…</p>}><DashboardPage /></Suspense>} /><Route path="/profile" element={<ProfilePage />} /><Route path="/routines" element={<Suspense fallback={<p role="status">Loading routines…</p>}><RoutinesPage /></Suspense>} /><Route path="*" element={<NotFound />} /></Routes></main>
-    <footer><span>Fitness App</span><span>Stage 3 · Routine planning</span></footer>
+    {session && <aside className="app-sidebar"><p className="eyebrow">TRAINING</p><nav aria-label="Your training">{links.map(link => <Link key={link.to} to={link.to} aria-current={`${pathname}${hash}` === link.to ? 'page' : undefined}><Icon name={link.icon} /><span>{link.label}</span></Link>)}</nav></aside>}
+    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/dashboard" element={<Suspense fallback={<p role="status">Loading dashboard…</p>}><DashboardPage /></Suspense>} /><Route path="/profile" element={<ProfilePage />} /><Route path="/routines" element={<Suspense fallback={<p role="status">Loading routines…</p>}><RoutinesPage /></Suspense>} /><Route path="*" element={<NotFound />} /></Routes><footer><span>Fitness App</span><span>Stage 3 · Routine planning</span></footer></main>
   </div>
 }

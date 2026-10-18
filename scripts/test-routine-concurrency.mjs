@@ -42,8 +42,8 @@ async function begin(client, owner = A) {
   await client.query('begin isolation level read committed; set local role authenticated')
   await client.query("select set_config('request.jwt.claim.sub',$1,true)", [owner])
 }
-async function save(client, id, value = document, request = randomUUID(), stamp = null) {
-  const { rows } = await client.query('select public.fitness_save_routine($1,$2::jsonb,$3,$4::timestamptz) as id', [id, JSON.stringify(value), request, stamp])
+async function save(client, id, value = document, request = randomUUID(), stamp = null, v2 = false) {
+  const { rows } = await client.query(`select public.fitness_save_routine${v2 ? '_v2' : ''}($1,$2::jsonb,$3,$4::timestamptz) as id`, [id, JSON.stringify(value), request, stamp])
   return rows[0].id
 }
 async function stamp(client, id) {
@@ -67,7 +67,7 @@ try {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to anon,authenticated; grant execute on function auth.uid() to anon,authenticated;`)
   await admin.query('insert into auth.users values ($1),($2)', [A, B])
-  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql']) {
+  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql','202610180004_profile_frequency.sql','202610180005_catalog_expansion.sql','202610180006_profile_gender.sql','202610180007_custom_planning.sql']) {
     await admin.query(await readFile(resolve(root, 'supabase/migrations', file), 'utf8'))
   }
   console.log(`Local PostgreSQL ${String((await admin.query('show server_version')).rows[0].server_version).split(' ')[0]}; separate connections; Supabase is not used.`)
@@ -146,7 +146,78 @@ try {
   assert.equal((await staleSession).error?.code, '23503')
   await second.query('rollback')
   pass('a workout referencing a concurrently replaced day fails safely and can reload the plan')
-  console.log('6 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
+  const planned = { ...document, days: [{ name: 'Session', weekday: null, exercises: [{ exercise_id: exercise, custom_exercise_name: null, planning_mode: 'per_set', target_sets: null, rep_min: null, rep_max: null, rest_seconds: null, notes: '', planned_sets: [] }] }] }
+  currentTest = 'v2 concurrent identical saves and competing edits'
+  const v2id=randomUUID(),v2request=randomUUID()
+  await begin(first);await save(first,v2id,planned,v2request,null,true)
+  await begin(second)
+  const v2retry=save(second,v2id,planned,v2request,null,true).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit')
+  assert.equal((await v2retry).value,v2id);await second.query('commit')
+  const v2stamp=await stamp(admin,v2id)
+  await begin(first);await save(first,v2id,{...planned,name:'V2 winner'},randomUUID(),v2stamp,true)
+  await begin(second)
+  const v2stale=save(second,v2id,planned,randomUUID(),v2stamp,true).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit')
+  assert.equal((await v2stale).error?.code,'40001');await second.query('rollback')
+  pass('v2 retries create one routine and competing edits reject a stale timestamp')
+
+  currentTest='parent mode update before planned target insert'
+  const parentId=(await admin.query('select e.id from routine_exercises e join routine_days d on d.id=e.routine_day_id where d.routine_id=$1',[v2id])).rows[0].id
+  await begin(first)
+  await first.query("update routine_exercises set planning_mode='legacy',target_sets=2,rep_min=8,rep_max=12,rest_seconds=120 where id=$1",[parentId])
+  await begin(second)
+  const targetInsert=second.query("insert into routine_planned_sets(routine_exercise_id,position,entered_unit) values ($1,0,'kg')",[parentId]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit')
+  assert.equal((await targetInsert).error?.code,'23514');await second.query('rollback')
+  pass('target insert waits for parent mode update then rejects the legacy parent')
+
+  currentTest='planned target insert before parent mode update'
+  await begin(first);await first.query("update routine_exercises set planning_mode='per_set',target_sets=null,rep_min=null,rep_max=null,rest_seconds=null where id=$1",[parentId]);await first.query('commit')
+  await begin(first);await first.query("insert into routine_planned_sets(routine_exercise_id,position,entered_unit) values ($1,0,'kg')",[parentId])
+  await begin(second)
+  const modeUpdate=second.query("update routine_exercises set planning_mode='legacy',target_sets=2,rep_min=8,rep_max=12,rest_seconds=120 where id=$1",[parentId]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit')
+  assert.equal((await modeUpdate).error?.code,'23514');await second.query('rollback')
+  pass('parent mode update waits for target insert then rejects incompatible legacy mode')
+  currentTest='delete confirmation races with a save'
+  const deletionId=randomUUID()
+  await begin(first);await save(first,deletionId,planned,randomUUID(),null,true);await first.query('commit')
+  const deletionStamp=await stamp(admin,deletionId)
+  await begin(first);await save(first,deletionId,{...planned,name:'Edited after delete confirmation'},randomUUID(),deletionStamp,true)
+  await begin(second)
+  const staleDelete=second.query('delete from routines where user_id=$1 and id=$2 and updated_at=$3::timestamptz returning id',[A,deletionId,deletionStamp]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit')
+  const deletedAfterSave=await staleDelete
+  assert.ok(!deletedAfterSave.error);assert.equal(deletedAfterSave.value.rows.length,0);await second.query('commit')
+  assert.equal((await admin.query('select name from routines where id=$1',[deletionId])).rows[0].name,'Edited after delete confirmation')
+  pass('stale permanent-delete confirmation waits for editing then affects zero rows')
+
+  currentTest='workout commits before deletion'
+  const protectedId=randomUUID()
+  await begin(first);await save(first,protectedId,planned,randomUUID(),null,true);await first.query('commit')
+  const protectedDay=(await admin.query('select id from routine_days where routine_id=$1',[protectedId])).rows[0].id
+  await begin(first);await first.query('insert into workout_sessions(user_id,routine_id,routine_day_id) values ($1,$2,$3)',[A,protectedId,protectedDay])
+  await begin(second)
+  const historyDelete=second.query('delete from routines where user_id=$1 and id=$2 returning id',[A,protectedId]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit')
+  assert.equal((await historyDelete).error?.code,'23503');await second.query('rollback')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where routine_id=$1',[protectedId])).rows[0].n,1)
+  assert.equal((await admin.query('select count(*)::int as n from routine_days where id=$1',[protectedDay])).rows[0].n,1)
+  pass('concurrently committed workout blocks deletion and preserves its routine and day')
+
+  currentTest='deletion commits before workout'
+  const removableId=randomUUID()
+  await begin(first);await save(first,removableId,planned,randomUUID(),null,true);await first.query('commit')
+  const removableDay=(await admin.query('select id from routine_days where routine_id=$1',[removableId])).rows[0].id
+  await begin(first);await first.query('delete from routines where user_id=$1 and id=$2',[A,removableId])
+  await begin(second)
+  const staleWorkout=second.query('insert into workout_sessions(user_id,routine_id,routine_day_id) values ($1,$2,$3)',[A,removableId,removableDay]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit')
+  assert.equal((await staleWorkout).error?.code,'23503');await second.query('rollback')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where routine_id=$1',[removableId])).rows[0].n,0)
+  pass('a workout started after permanent deletion fails safely without orphan history')
+  console.log('12 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
 } catch (error) {
   // Never output native runner configuration or generated passwords.
   console.error(`FAIL ${currentTest}${error?.code ? ` (code ${error.code})` : ''}. Hosted database was not accessed.`)

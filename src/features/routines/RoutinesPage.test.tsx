@@ -4,96 +4,155 @@ import { MemoryRouter, Routes, Route } from 'react-router'
 import { beforeEach, vi } from 'vitest'
 import { RoutinesPage } from './RoutinesPage'
 import { testCatalog, testDocument, testProfile } from './testFixtures'
-
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), archive: vi.fn(), client: {}, user: 'user-a' as string | null }))
-vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ client: mocks.client, session: mocks.user ? { user: { id: mocks.user } } : null, loading: false, error: '' }) }))
-vi.mock('./repository', () => ({ loadWorkspace: mocks.load, saveRoutine: mocks.save, archiveRoutine: mocks.archive }))
-const saved = { id: 'routine-a', updated_at: '2026-01-01', archived_at: null, document: testDocument }
-const workspace = () => ({ profile: testProfile, catalog: testCatalog, routines: [saved] })
-beforeEach(() => {
-  vi.clearAllMocks(); mocks.user = 'user-a'
-  mocks.load.mockResolvedValue(workspace()); mocks.save.mockResolvedValue('routine-a'); mocks.archive.mockResolvedValue(undefined)
+const mocks=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),archive:vi.fn(),delete:vi.fn(),client:{},user:'user-a' as string|null}))
+vi.mock('../auth/AuthProvider',()=>({useAuth:()=>({client:mocks.client,session:mocks.user?{user:{id:mocks.user}}:null,loading:false,error:''})}))
+vi.mock('./repository',()=>({loadWorkspace:mocks.load,saveRoutine:mocks.save,archiveRoutine:mocks.archive,deleteRoutine:mocks.delete}))
+const saved={id:'routine-a',updated_at:'2026-01-01',archived_at:null,document:testDocument}
+const workspace=()=>({profile:testProfile,catalog:testCatalog,routines:[saved]})
+beforeEach(()=>{vi.clearAllMocks();mocks.user='user-a';mocks.load.mockResolvedValue(workspace());mocks.save.mockImplementation(async(_client,id)=>id);mocks.archive.mockResolvedValue(undefined);mocks.delete.mockResolvedValue(undefined)})
+function routing(savedView=false){return <MemoryRouter initialEntries={[savedView ? '/routines#saved' : '/routines']}><Routes><Route path="/routines" element={<RoutinesPage/>}/><Route path="/login" element={<h1>Please sign in</h1>}/></Routes></MemoryRouter>}
+function page(savedView=false){return render(routing(savedView))}
+test('signed-out users cannot load routine data',()=>{mocks.user=null;page();expect(screen.getByRole('heading',{name:'Please sign in'})).toBeVisible();expect(mocks.load).not.toHaveBeenCalled()})
+test('one collapsed recommendation opens sessions and cancel resets it without any writes or dialogs',async()=>{
+  const confirm=vi.spyOn(window,'confirm'),user=userEvent.setup();page()
+  expect(await screen.findAllByRole('button',{name:/Open routine/})).toHaveLength(1)
+  expect(screen.queryByRole('button',{name:'Use This Routine'})).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button',{name:/Open routine/}))
+  expect(screen.getByRole('button',{name:'Use This Routine'})).toBeVisible()
+  expect(screen.getByText('Full Body A')).toBeVisible()
+  expect(screen.queryByRole('region', { name: 'Full Body A' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /Full Body A/ }))
+  expect(screen.getByRole('region', { name: 'Full Body A' })).toBeVisible()
+  expect(mocks.save).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button',{name:'Cancel'}))
+  expect(screen.getByRole('button',{name:/Open routine/})).toBeVisible()
+  expect(screen.queryByText('Full Body A')).not.toBeInTheDocument()
+  expect(mocks.save).not.toHaveBeenCalled();expect(mocks.archive).not.toHaveBeenCalled();expect(confirm).not.toHaveBeenCalled();confirm.mockRestore()
+  await user.click(screen.getByRole('button', { name: /Open routine/ }))
+  expect(screen.queryByRole('region', { name: 'Full Body A' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Full Body A/ })).toHaveAttribute('aria-expanded', 'false')
 })
-function routing() {
-  return <MemoryRouter initialEntries={['/routines']}><Routes><Route path="/routines" element={<RoutinesPage />} /><Route path="/login" element={<h1>Please sign in</h1>} /></Routes></MemoryRouter>
-}
-function page() { return render(routing()) }
-
-test('signed-out users cannot load routine data', () => {
-  mocks.user = null
-  page()
-  expect(screen.getByRole('heading', { name: 'Please sign in' })).toBeVisible()
-  expect(mocks.load).not.toHaveBeenCalled()
-})
-
-test('recommendation selection opens the full prescription and saves through the repository', async () => {
-  page()
-  const user = userEvent.setup()
-  await user.click(await screen.findByRole('button', { name: /Customize & save Full body · standard/ }))
-  expect(screen.getByRole('heading', { name: 'Edit your routine' })).toBeVisible()
-  expect(screen.getByLabelText('Workout 1, exercise 1: Minimum reps')).toHaveValue(8)
-  expect(screen.getByLabelText('Workout 1, exercise 1: Rest seconds')).toHaveValue(120)
-  await user.click(screen.getByRole('button', { name: 'Save routine' }))
-  expect(mocks.save).toHaveBeenCalledWith(mocks.client, expect.any(String), expect.objectContaining({ origin_template_key: 'full-body-standard' }), expect.any(String), null)
-  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit your routine' })).not.toBeInTheDocument())
+test('Use explicitly saves targets-unset plan, reloads and reports server-confirmed success',async()=>{
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:/Open routine/}))
+  mocks.load.mockResolvedValue({...workspace(),routines:[saved,{...saved,id:'new',document:{...testDocument,name:'Full body'}}]})
+  await user.click(screen.getByRole('button',{name:'Use This Routine'}))
+  expect(mocks.save).toHaveBeenCalledTimes(1)
+  expect(mocks.save.mock.calls[0][2].days[0].exercises[0]).toMatchObject({planning_mode:'per_set',planned_sets:[],target_sets:null})
+  expect(screen.getByRole('status')).toHaveTextContent('Available under My routines')
   expect(mocks.load).toHaveBeenCalledTimes(2)
-})
-
-test('custom creation and existing-routine editing are available', async () => {
-  const user = userEvent.setup()
-  page()
-  await user.click(await screen.findByRole('button', { name: 'Edit My training plan' }))
-  expect(screen.getByLabelText('Routine name')).toHaveValue(testDocument.name)
-  await user.click(screen.getByRole('button', { name: 'Save routine' }))
-  expect(mocks.save).toHaveBeenCalledWith(mocks.client, saved.id, expect.any(Object), expect.any(String), saved.updated_at)
-  await user.click(screen.getByRole('button', { name: 'Create routine' }))
-  expect(screen.getByLabelText('Routine name')).toHaveValue('My routine')
-})
-
-test('archive requires confirmation, preserves records, and reloads from Supabase', async () => {
-  const user = userEvent.setup()
-  page()
-  await user.click(await screen.findByRole('button', { name: 'Archive My training plan' }))
-  expect(mocks.archive).not.toHaveBeenCalled()
-  await user.click(screen.getByRole('button', { name: 'Confirm archive' }))
-  expect(mocks.archive).toHaveBeenCalledWith(mocks.client, 'user-a', saved)
-  expect(screen.getByRole('status')).toHaveTextContent('Routine archived')
-  expect(mocks.load).toHaveBeenCalledTimes(2)
-})
-
-test('load failures are actionable and retryable', async () => {
-  mocks.load.mockRejectedValueOnce(new Error('network'))
-  page()
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load routines')
-  await userEvent.click(screen.getByRole('button', { name: 'Retry loading routines' }))
-  expect(await screen.findByRole('heading', { name: 'My routines' })).toBeVisible()
-})
-
-test('remounting reloads saved routines instead of reading an in-browser cache', async () => {
-  const first = page()
-  await screen.findByRole('heading', { name: 'My training plan' })
-  first.unmount()
-  mocks.load.mockResolvedValue({ ...workspace(), routines: [{ ...saved, document: { ...testDocument, name: 'Reloaded saved plan' } }] })
-  page()
-  expect(await screen.findByRole('heading', { name: 'Reloaded saved plan' })).toBeVisible()
-  expect(mocks.load).toHaveBeenCalledTimes(2)
-})
-
-test('missing fitness profile links to setup and does not generate default recommendations', async () => {
-  mocks.load.mockResolvedValue({ ...workspace(), profile: null })
-  page()
-  expect(await screen.findByRole('link', { name: 'fitness profile' })).toHaveAttribute('href', '/profile')
-  expect(screen.queryByText('Recommended')).not.toBeInTheDocument()
-})
-
-
-test('switching accounts clears the previous account’s routines before the new load completes', async () => {
-  const result = page()
-  await screen.findByRole('heading', { name: 'My training plan' })
-  mocks.user = 'user-b'
-  mocks.load.mockReturnValue(new Promise(() => {}))
-  result.rerender(routing())
   expect(screen.queryByRole('heading', { name: 'My training plan' })).not.toBeInTheDocument()
-  expect(screen.getByRole('status')).toHaveTextContent('Loading your training journal')
-  expect(mocks.load).toHaveBeenLastCalledWith(mocks.client, 'user-b')
+  await user.click(screen.getByRole('link', { name: /My routines/ }))
+  expect(await screen.findByRole('heading', { name: 'My training plan' })).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Full body' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: /Open routine/ })).not.toBeInTheDocument()
+})
+test('Use error retains preview, retries with same routine/request IDs and Cancel clears error/retry state',async()=>{
+  mocks.save.mockRejectedValue(new Error('Migration 007 is needed. Not saved.'))
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:/Open routine/}));await user.click(screen.getByRole('button',{name:'Use This Routine'}))
+  expect(screen.getByRole('alert')).toHaveTextContent('Not saved')
+  await user.click(screen.getByRole('button',{name:'Use This Routine'}));expect(mocks.save.mock.calls[1]).toEqual(mocks.save.mock.calls[0])
+  await user.click(screen.getByRole('button',{name:'Cancel'}));expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button',{name:/Open routine/}));await user.click(screen.getByRole('button',{name:'Use This Routine'}))
+  expect(mocks.save.mock.calls[2][1]).not.toBe(mocks.save.mock.calls[0][1]);expect(mocks.save.mock.calls[2][3]).not.toBe(mocks.save.mock.calls[0][3])
+})
+test('acceptance disables cancel/customize and other write actions while pending',async()=>{
+  let resolve!:(value:string)=>void;mocks.save.mockImplementation(()=>new Promise<string>(done=>{resolve=done}))
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:/Open routine/}));await user.click(screen.getByRole('button',{name:'Use This Routine'}))
+  for(const name of ['Cancel','Customize','Create My Own Routine']) expect(screen.getByRole('button',{name})).toBeDisabled()
+  resolve('saved');await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Routine saved'))
+})
+test('customization deep-clones, hides other task states and cancel restores original recommendation',async()=>{
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:/Open routine/}));await user.click(screen.getByRole('button',{name:'Customize'}))
+  expect(screen.queryByRole('button',{name:'Use This Routine'})).not.toBeInTheDocument();expect(screen.queryByRole('heading',{name:'My routines'})).not.toBeInTheDocument()
+  await user.clear(screen.getByLabelText('Exercise name'));await user.type(screen.getByLabelText('Exercise name'),'Custom movement')
+  await user.click(screen.getByRole('button',{name:'Cancel'}));expect(mocks.save).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button',{name:/Open routine/}));await user.click(screen.getByRole('button',{name:'Customize'}))
+  expect(screen.getByLabelText('Exercise name')).not.toHaveValue('Custom movement')
+  await user.click(screen.getByRole('button',{name:'Save Routine'}))
+  expect(mocks.save.mock.calls[0][4]).toBeNull();expect(mocks.save.mock.calls[0][1]).not.toBe(saved.id)
+})
+test('creation needs no profile or catalog; free text is saved only on Save Routine',async()=>{
+  mocks.load.mockResolvedValue({profile:null,catalog:[],routines:[]})
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:'Create My Own Routine'}))
+  await user.type(screen.getByLabelText('Routine name'),'My custom plan');await user.type(screen.getByLabelText('Workout/session name'),'Back and Biceps');await user.type(screen.getByLabelText('Exercise name'),'Sled drag')
+  expect(mocks.save).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:'Save Routine'}))
+  expect(mocks.save.mock.calls[0][2]).toMatchObject({goal:'general_fitness',days:[{exercises:[{exercise_id:null,custom_exercise_name:'Sled drag'}]}]})
+})
+test('saved edits keep identity, exact timestamp, legacy ranges, and cancel never writes',async()=>{
+  const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Edit My training plan'}));expect(screen.getByLabelText('Routine name')).toHaveValue(testDocument.name)
+  await user.click(screen.getByRole('button',{name:'Save Changes'}));expect(mocks.save).toHaveBeenCalledWith(mocks.client,saved.id,testDocument,expect.any(String),saved.updated_at)
+})
+test('archive requires confirmation and reloads',async()=>{
+  page(true);await userEvent.click(await screen.findByRole('button',{name:'Archive My training plan'}));expect(mocks.archive).not.toHaveBeenCalled();await userEvent.click(screen.getByRole('button',{name:'Confirm archive'}));expect(mocks.archive).toHaveBeenCalledWith(mocks.client,'user-a',saved);expect(mocks.load).toHaveBeenCalledTimes(2)
+})
+test('remounting reloads saved routines and account changes clear stale drafts',async()=>{
+  const first=page(true);await screen.findByRole('heading',{name:'My training plan'});await userEvent.click(screen.getByRole('button',{name:'Create My Own Routine'}));await userEvent.type(screen.getByLabelText('Routine name'),'Private draft')
+  mocks.user='user-b';mocks.load.mockReturnValue(new Promise(()=>{}));first.rerender(routing(true));expect(screen.queryByLabelText('Routine name')).not.toBeInTheDocument();expect(screen.getByRole('status')).toHaveTextContent('Loading your training journal');expect(mocks.load).toHaveBeenLastCalledWith(mocks.client,'user-b')
+})
+test('load failures offer retry',async()=>{mocks.load.mockRejectedValueOnce(new Error('network'));page(true);expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load');await userEvent.click(screen.getByRole('button',{name:'Retry loading routines'}));expect(await screen.findByRole('heading',{name:/My routines/})).toBeVisible()})
+
+
+test('Delete requires its own explicit confirmation and Keep routine performs no write',async()=>{
+  const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}))
+  expect(screen.getByRole('alertdialog')).toHaveTextContent('cannot be undone')
+  expect(screen.getByRole('heading',{name:'Permanently delete My training plan?'})).toHaveFocus()
+  expect(mocks.delete).not.toHaveBeenCalled();expect(mocks.archive).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button',{name:'Keep routine'}))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();expect(mocks.delete).not.toHaveBeenCalled()
+})
+test('confirmed Delete targets only the selected routine; success removes it and reloads',async()=>{
+  const other={...saved,id:'other',document:{...testDocument,name:'Other plan'}}
+  mocks.load.mockResolvedValue({...workspace(),routines:[saved,other]})
+  const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}))
+  mocks.load.mockResolvedValue({...workspace(),routines:[other]})
+  await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+  expect(mocks.delete).toHaveBeenCalledWith(mocks.client,'user-a',saved)
+  expect(mocks.save).not.toHaveBeenCalled();expect(mocks.archive).not.toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent('permanently deleted')
+  expect(screen.queryByRole('heading',{name:'My training plan'})).not.toBeInTheDocument()
+  expect(screen.getByRole('heading',{name:'Other plan'})).toBeVisible();expect(mocks.load).toHaveBeenCalledTimes(2)
+})
+test('history/permission delete failures retain the routine and never claim success',async()=>{
+  mocks.delete.mockRejectedValue(new Error('This routine is linked to workout history. Use Archive.'))
+  const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}));await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+  expect(screen.getByRole('alert')).toHaveTextContent('workout history');expect(screen.getByRole('heading',{name:'My training plan'})).toBeVisible()
+  expect(screen.getByRole('status')).not.toHaveTextContent('deleted');expect(mocks.archive).not.toHaveBeenCalled()
+})
+test('archived plans also offer Delete separately from Archive',async()=>{
+  mocks.load.mockResolvedValue({...workspace(),routines:[{...saved,archived_at:'2026-10-01'}]})
+  const user=userEvent.setup();page(true);await user.click(await screen.findByText('Archived routines (1)'))
+  await user.click(screen.getByRole('button',{name:'Delete My training plan'}));expect(screen.getByRole('alertdialog')).toBeVisible()
+})
+test('deletion cannot be canceled or submitted twice while pending',async()=>{
+  let resolve!:()=>void;mocks.delete.mockImplementation(()=>new Promise<void>(done=>{resolve=done}))
+  const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}));await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+  expect(screen.getByRole('button',{name:'Keep routine'})).toBeDisabled();expect(screen.getByRole('button',{name:'Deleting…'})).toBeDisabled()
+  resolve();await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('permanently deleted'))
+})
+test('creation starts blank every time and the final typed exercise saves without an extra Add action',async()=>{
+  const user=userEvent.setup();page();await user.click(await screen.findByRole('button',{name:'Create My Own Routine'}))
+  expect(screen.getByLabelText('Routine name')).toHaveValue('');expect(screen.getByLabelText('Exercise name')).toHaveValue('')
+  expect(screen.queryByRole('list',{name:'Added exercises'})).not.toBeInTheDocument()
+  await user.type(screen.getByLabelText('Exercise name'),'Unsaved');await user.click(screen.getByRole('button',{name:'Cancel'}))
+  await user.click(screen.getByRole('button',{name:'Create My Own Routine'}));expect(screen.getByLabelText('Exercise name')).toHaveValue('')
+  await user.type(screen.getByLabelText('Routine name'),'My routine');await user.type(screen.getByLabelText('Workout/session name'),'Back');await user.type(screen.getByLabelText('Exercise name'),'Custom row')
+  await user.click(screen.getByRole('button',{name:'Save Routine'}));expect(mocks.save.mock.calls[0][2].days[0].exercises).toHaveLength(1)
+  expect(mocks.save.mock.calls[0][4]).toBeNull()
+})
+
+test('Discover and My routines show separate content and navigation preserves saved data without writes', async () => {
+  const user = userEvent.setup()
+  page()
+  expect(await screen.findByRole('button', { name: /Open routine/ })).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Edit My training plan' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('link', { name: /My routines/ }))
+  expect(await screen.findByRole('button', { name: 'Edit My training plan' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: /Open routine/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Recommended' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('link', { name: /Discover routines/ }))
+  expect(await screen.findByRole('button', { name: /Open routine/ })).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Edit My training plan' })).not.toBeInTheDocument()
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(mocks.archive).not.toHaveBeenCalled()
+  expect(mocks.delete).not.toHaveBeenCalled()
 })
