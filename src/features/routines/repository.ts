@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { ProfileDraft } from '../profile/profile'
+import { normalizeProfile, type ProfileDraft } from '../profile/profile'
 import type { Exercise, RoutineDocument, SavedRoutine } from './types'
 
 function editableAssumptions(value: Record<string, unknown> | null) {
@@ -10,14 +10,14 @@ function editableAssumptions(value: Record<string, unknown> | null) {
 const failure = 'Unable to load routines. Check your connection and database setup, then retry.'
 export async function loadWorkspace(client: SupabaseClient, userId: string): Promise<{ profile: ProfileDraft | null; catalog: Exercise[]; routines: SavedRoutine[] }> {
   const results = await Promise.all([
-    client.from('profiles').select('display_name,goal,experience,available_weekdays,timeline_weeks,equipment,display_unit,timezone').eq('user_id', userId).maybeSingle(),
+    client.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
     client.from('exercises').select('*').is('deprecated_at', null).order('name'),
     client.from('routines').select('*,routine_days(*,routine_exercises(*))').eq('user_id', userId).order('created_at', { ascending: false }),
   ])
   if (results.some(result => result.error)) throw new Error(failure)
   const [profile, catalog, routines] = results
   return {
-    profile: profile.data, catalog: catalog.data ?? [],
+    profile: profile.data ? normalizeProfile(profile.data) : null, catalog: catalog.data ?? [],
     routines: (routines.data ?? []).map(row => ({
       id: row.id, updated_at: row.updated_at, archived_at: row.archived_at,
       document: {
