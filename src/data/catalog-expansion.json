@@ -1,0 +1,700 @@
+{
+  "sources": [
+    {
+      "id": "10000000-0000-4000-8000-000000000004",
+      "organization": "ACSM",
+      "title": "Currier et al. Resistance Training Prescription: An Overview of Reviews",
+      "publication_year": 2026,
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Progressive training; goal-sensitive loading and weekly volume.",
+      "limitations": "Healthy-adult averages, mostly inexperienced participants; app defaults are not individual prescriptions."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000005",
+      "organization": "JSCR",
+      "title": "Kassiano et al. Does Varying Resistance Exercises Promote Superior Muscle Hypertrophy and Strength Gains?",
+      "publication_year": 2022,
+      "url": "https://pubmed.ncbi.nlm.nih.gov/35438660/",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Systematic variation while retaining exercise specificity.",
+      "limitations": "Eight small studies in young men; does not validate arbitrary exercise rotation."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000006",
+      "organization": "JSCR",
+      "title": "Ramos-Campo et al. Efficacy of Split Versus Full-Body Resistance Training",
+      "publication_year": 2024,
+      "url": "https://pubmed.ncbi.nlm.nih.gov/38595233/",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Volume-equated split selection can reflect practical preferences.",
+      "limitations": "No universal best split or evidence that six days is required."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000007",
+      "organization": "NSCA",
+      "title": "Lincoln, Ill and Ibrahim. Progressive Strategies for Teaching Fundamental Resistance Training Movement Patterns",
+      "publication_year": 2023,
+      "url": "https://www.nsca.com/education/articles/ptq/teaching-resistance-training-movement-patterns/",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Skill-appropriate progressions and movement proficiency.",
+      "limitations": "Professional education; exercise descriptions and rankings are original app editorial guidance."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000008",
+      "organization": "NSCA",
+      "title": "Snarr and Batrakoulis. Types of Resistance Training Equipment",
+      "publication_year": 2025,
+      "url": "https://www.nsca.com/certification/nsca-cpt/essentials-of-personal-training--3rd-edition/excerpts/types-of-resistance-training-equipment/",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Equipment selection considers training status, proficiency, and preference.",
+      "limitations": "Educational excerpt; machine setup varies and broad equipment categories do not prove availability."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000009",
+      "organization": "BJSM",
+      "title": "Currier et al. Resistance training prescription: systematic review and Bayesian network meta-analysis",
+      "publication_year": 2023,
+      "url": "https://bjsm.bmj.com/content/57/18/1211",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Multiple prescriptions work; heavier load emphasis for strength and multiset hypertrophy options.",
+      "limitations": "Network rankings are not individual outcome guarantees."
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000010",
+      "organization": "PLoS ONE",
+      "title": "Baz-Valle et al. Exercise variation, muscle thickness, strength and motivation",
+      "publication_year": 2019,
+      "url": "https://doi.org/10.1371/journal.pone.0226989",
+      "accessed_on": "2026-10-18",
+      "supported_guidance": "Variation can affect motivation alongside training adaptations.",
+      "limitations": "Small short trial in trained men; similar observed changes do not prove equivalence."
+    }
+  ],
+  "exercises": [
+    {
+      "id": "20000000-0000-4000-8000-000000000013",
+      "slug": "barbell-back-squat",
+      "name": "Barbell back squat",
+      "movement_pattern": "squat",
+      "primary_muscles": [
+        "quadriceps",
+        "glutes"
+      ],
+      "secondary_muscles": [
+        "trunk"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a rack with safeties. Brace, sit down between your hips, then stand with control. Choose a comfortable depth. Record total bar weight.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000014",
+      "slug": "leg-press",
+      "name": "Leg press",
+      "movement_pattern": "squat",
+      "primary_muscles": [
+        "quadriceps",
+        "glutes"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Confirm a leg press is available. Keep your back supported, lower within a controlled range, then press without snapping the knees straight. Record the same machine and loading convention.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000015",
+      "slug": "dumbbell-split-squat",
+      "name": "Dumbbell split squat",
+      "movement_pattern": "squat",
+      "primary_muscles": [
+        "quadriceps",
+        "glutes"
+      ],
+      "secondary_muscles": [
+        "trunk"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "per_implement",
+      "technique_notes": "Take a stable split stance. Lower the rear knee toward the floor and push through the front foot to stand. Record reps per side and weight per dumbbell.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000016",
+      "slug": "dumbbell-floor-press",
+      "name": "Dumbbell floor press",
+      "movement_pattern": "horizontal_push",
+      "primary_muscles": [
+        "chest"
+      ],
+      "secondary_muscles": [
+        "triceps",
+        "shoulders"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "per_implement",
+      "technique_notes": "Lie on the floor with knees bent. Lower until the upper arms gently meet the floor, then press up. Use a controlled setup. Record weight per dumbbell.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000017",
+      "slug": "barbell-bench-press",
+      "name": "Barbell bench press",
+      "movement_pattern": "horizontal_push",
+      "primary_muscles": [
+        "chest"
+      ],
+      "secondary_muscles": [
+        "triceps",
+        "shoulders"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a bench and rack with safeties or appropriate spotting. Keep feet planted, lower the bar under control toward the chest, then press. Record total bar weight.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000018",
+      "slug": "lat-pulldown",
+      "name": "Lat pulldown",
+      "movement_pattern": "vertical_pull",
+      "primary_muscles": [
+        "back"
+      ],
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Secure the thigh pad. Pull the handle toward your upper chest without swinging or pulling behind your neck. Return with control. Record the same machine and handle.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000019",
+      "slug": "seated-leg-curl",
+      "name": "Seated leg curl",
+      "movement_pattern": "knee_flexion",
+      "primary_muscles": [
+        "hamstrings"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Align knees with the machine pivot and secure the pads. Curl down within a comfortable range, then return slowly. Follow the machine setup instructions.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000020",
+      "slug": "dumbbell-lateral-raise",
+      "name": "Dumbbell lateral raise",
+      "movement_pattern": "lateral_raise",
+      "primary_muscles": [
+        "shoulders"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "per_implement",
+      "technique_notes": "Stand steadily with soft elbows. Raise the arms out to the sides toward shoulder height without swinging, then lower with control. Record weight per dumbbell.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000021",
+      "slug": "dumbbell-curl",
+      "name": "Dumbbell curl",
+      "movement_pattern": "elbow_flexion",
+      "primary_muscles": [
+        "biceps"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "per_implement",
+      "technique_notes": "Keep upper arms steady. Curl the dumbbells by bending the elbows, then lower with control. Avoid swinging. Record reps per side and weight per dumbbell.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000022",
+      "slug": "cable-triceps-pressdown",
+      "name": "Cable triceps pressdown",
+      "movement_pattern": "elbow_extension",
+      "primary_muscles": [
+        "triceps"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a high cable attachment. Keep elbows near your sides and extend the arms downward without moving the shoulders. Return with control. Record the same pulley and attachment.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000023",
+      "slug": "standing-dumbbell-calf-raise",
+      "name": "Standing dumbbell calf raise",
+      "movement_pattern": "calf",
+      "primary_muscles": [
+        "calves"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "per_implement",
+      "technique_notes": "Stand on level ground with balanced footing. Raise the heels, pause briefly, and lower with control. Use stable support if needed. Record weight per dumbbell.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000024",
+      "slug": "dumbbell-hip-thrust",
+      "name": "Dumbbell hip thrust",
+      "movement_pattern": "hinge",
+      "primary_muscles": [
+        "glutes"
+      ],
+      "secondary_muscles": [
+        "hamstrings"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a stable bench for upper-back support and secure the dumbbell at the hip crease. Drive through the feet to extend the hips without overextending the back. Record the single dumbbell load.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000025",
+      "slug": "push-up",
+      "name": "Push-up",
+      "movement_pattern": "horizontal_push",
+      "primary_muscles": [
+        "chest"
+      ],
+      "secondary_muscles": [
+        "triceps",
+        "shoulders",
+        "trunk"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "loading_mode": "bodyweight",
+      "technique_notes": "Keep the trunk braced. Lower the chest toward the floor with elbows controlled, then press away. Stop before technique breaks down. Track reps without invented external load.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000026",
+      "slug": "band-row",
+      "name": "Standing band row",
+      "movement_pattern": "horizontal_pull",
+      "primary_muscles": [
+        "back"
+      ],
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": [
+        "band"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a secure anchor at torso height and inspect the band. Pull toward the ribs with a steady trunk, then release slowly. Record band identity and setup; do not convert tension to kilograms.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000027",
+      "slug": "band-rdl",
+      "name": "Band Romanian deadlift",
+      "movement_pattern": "hinge",
+      "primary_muscles": [
+        "hamstrings",
+        "glutes"
+      ],
+      "secondary_muscles": [
+        "back"
+      ],
+      "equipment": [
+        "band"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Stand securely on the middle of the band. With knees soft, hinge the hips back, then stand tall against tension. Inspect the band. Record band identity and setup, not an invented kilogram load.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000028",
+      "slug": "standing-calf-raise",
+      "name": "Standing calf raise",
+      "movement_pattern": "calf",
+      "primary_muscles": [
+        "calves"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "bodyweight"
+      ],
+      "loading_mode": "bodyweight",
+      "technique_notes": "Stand on level ground near stable support. Raise your heels and lower slowly without bouncing. Track reps; no external load is assumed.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000029",
+      "slug": "band-leg-curl",
+      "name": "Lying band leg curl",
+      "movement_pattern": "knee_flexion",
+      "primary_muscles": [
+        "hamstrings"
+      ],
+      "secondary_muscles": [],
+      "equipment": [
+        "band"
+      ],
+      "loading_mode": "external",
+      "technique_notes": "Use a secure low anchor and appropriate ankle attachment. Lie face down, bend the knee against band tension, then extend slowly. Record band and setup, not kilograms.",
+      "default_rest_min_seconds": 60,
+      "default_rest_max_seconds": 120,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000030",
+      "slug": "pull-up",
+      "name": "Pull-up",
+      "movement_pattern": "vertical_pull",
+      "primary_muscles": [
+        "back"
+      ],
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "loading_mode": "bodyweight",
+      "technique_notes": "Use a secure overhead bar. Pull the chest upward with a steady trunk and lower with control. Avoid swinging. Track bodyweight reps without invented external load.",
+      "default_rest_min_seconds": 120,
+      "default_rest_max_seconds": 180,
+      "evidence_source_ids": [
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    }
+  ],
+  "alternatives": [
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000013",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000002",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000014",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000002",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000015",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000002",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000016",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000005",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000017",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000005",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000018",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000030",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Equipment, setup and resistance differ. Keep loads and exercise histories separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000019",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000029",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Equipment, setup and resistance differ. Keep loads and exercise histories separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000020",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000009",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000021",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000007",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Curls focus on elbow flexion; rows also train the back.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000022",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000005",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Pressdowns isolate elbow extension; chest presses also involve the chest and shoulders.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000023",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000028",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Equipment, setup and resistance differ. Keep loads and exercise histories separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000024",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000003",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000025",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000005",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000026",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000007",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000027",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000003",
+      "similarities": "Shares a related training region or movement goal.",
+      "differences": "Equipment, stability and loading differ. Keep exercise histories and loads separate.",
+      "suitability_notes": "Review equipment and technique. This is not a load-equivalent or identical muscle stimulus.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000028",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000023",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Resistance, stability, setup and load measurement differ. Do not transfer loads.",
+      "suitability_notes": "Confirm the required equipment and use controlled technique.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000029",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000019",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Resistance, stability, setup and load measurement differ. Do not transfer loads.",
+      "suitability_notes": "Confirm the required equipment and use controlled technique.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "exercise_id": "20000000-0000-4000-8000-000000000030",
+      "alternative_exercise_id": "20000000-0000-4000-8000-000000000018",
+      "similarities": "Shares the same primary movement and target muscles.",
+      "differences": "Resistance, stability, setup and load measurement differ. Do not transfer loads.",
+      "suitability_notes": "Confirm the required equipment and use controlled technique.",
+      "source_ids": [
+        "10000000-0000-4000-8000-000000000007",
+        "10000000-0000-4000-8000-000000000008"
+      ]
+    }
+  ]
+}

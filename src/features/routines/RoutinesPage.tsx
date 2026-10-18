@@ -3,7 +3,6 @@ import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from '../auth/AuthProvider'
 import { Badge, Icon, PageHeading } from '../../components/ui'
 import { RoutinePlan } from './RoutinePlan'
-import { weekdays } from '../profile/profile'
 import { guidanceSources, recommendRoutines } from './recommendations'
 import { archiveRoutine, loadWorkspace, saveRoutine } from './repository'
 import { RoutineEditor } from './RoutineEditor'
@@ -83,7 +82,7 @@ function RoutineWorkspace({ userId }: { userId: string }) {
       {recommendations?.options.length === 0 && <div className="notice">{recommendations.limitations.map(item => <p key={item}>{item}</p>)}</div>}
       <div className="recommendation-list">{recommendations?.options.map((option, index) => <article key={option.key} className="recommendation">
         <div className="recommendation-art"><Icon name="strength" /><span className="number">PLAN {String(index + 1).padStart(2, '0')}</span></div><div className="recommendation-body"><Badge>{option.document.days.length} workouts / week</Badge><h3>{option.document.name}</h3>
-        <p>{option.document.days.map(day => weekdays[day.weekday!]).join(' / ')}</p>
+        <p>{option.document.days.map(day => day.name).join(' / ')}</p>
         <details><summary>Plan details</summary><p>{option.rationale}</p><RoutinePlan document={option.document} catalog={catalog} /><ul>{option.cautions.map(item => <li key={item}>{item}</li>)}</ul><p>Weekly sets by primary muscle (secondary muscles excluded): {Object.entries(option.weeklySets).map(([muscle, sets]) => `${muscle}: ${sets}`).join('; ')}.</p><p>Starting volume may be below higher-volume muscle-growth targets. Build gradually.</p></details>
         <button aria-label={`Customize & save ${option.document.name}`} onClick={() => startEditing(option.document)}>Customize</button></div>
       </article>)}</div>
@@ -93,6 +92,6 @@ function RoutineWorkspace({ userId }: { userId: string }) {
     {archiveTarget && <fieldset className="archive-confirm"><legend>Archive {archiveTarget.document.name}?</legend><p>Moves this plan to Archived. Workout history stays intact.</p><div className="inline-actions"><button disabled={busy} onClick={confirmArchive}>{busy ? 'Archiving…' : 'Confirm archive'}</button><button disabled={busy} className="secondary-button" onClick={() => setArchiveTarget(null)}>Keep routine</button></div></fieldset>}
     {editing && profile && <RoutineEditor key={editing.key} initial={editing.document} catalog={catalog} profile={profile} onSave={persist} onCancel={() => { if (window.confirm('Discard these unsaved routine edits?')) setEditing(null) }} />}
     {archived.length > 0 && <details className="archived-routines"><summary>Archived routines ({archived.length})</summary>{archived.map(routine => <article key={routine.id}><h3>{routine.document.name}</h3><RoutinePlan document={routine.document} catalog={catalog} /></article>)}</details>}
-    <aside className="method-notes"><h2>Training principles</h2><p>Plans match your goal, experience, equipment, and available days. Full-body sessions are spaced where possible. Experienced lifters may get an upper/lower split. Equipment gaps are flagged.</p><p>ACSM and NSCA inform the guidance. Sets, reps, and rest are adjustable app defaults. CDC guidance also includes aerobic activity, which this app does not track.</p><ul>{guidanceSources.map(source => <li key={source.url}><a href={source.url}>{source.title}</a></li>)}</ul><p>Control the load. Results are not guaranteed by your review date. For pain or medical limitations, seek qualified guidance.</p></aside>
+    <aside className="method-notes"><h2>Training principles</h2><p>Plans match your goal, experience, confirmed equipment, and weekly frequency. Follow the workout order on days you choose. Keep anchor lifts stable and allow recovery between repeated muscle groups.</p><p>ACSM, NSCA, and peer-reviewed reviews inform the guidance. Sets, reps, rest, and split choices are app defaults. More training days do not automatically mean more volume. Aerobic activity is not tracked.</p><ul>{guidanceSources.map(source => <li key={source.url}><a href={source.url}>{source.title}</a></li>)}</ul><p>Control the load. Results are not guaranteed by your review date. For pain or medical limitations, seek qualified guidance.</p></aside>
   </section>
 }

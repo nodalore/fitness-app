@@ -1,6 +1,6 @@
 export const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 export const equipmentOptions = ['bodyweight', 'dumbbell', 'barbell', 'machine', 'band']
-export const equipmentDetails = { bench: 'Bench', rack: 'Squat rack + safeties', leg_press: 'Leg press', lat_pulldown: 'Lat pulldown', leg_curl: 'Leg curl', cable_station: 'Cable station', calf_machine: 'Calf raise machine' }
+export const equipmentDetails = { bench: 'Bench', rack: 'Squat rack + safeties', leg_press: 'Leg press', lat_pulldown: 'Lat pulldown', leg_curl: 'Leg curl', cable_station: 'Cable station', calf_machine: 'Calf raise machine', chest_press: 'Chest press machine', seated_row: 'Seated row machine', shoulder_press: 'Shoulder press machine', stable_support: 'Stable row support', band_anchor: 'Secure band anchor + attachments', pull_up_bar: 'Pull-up bar' }
 export type ProfileDraft = {
   display_name: string
   goal: string

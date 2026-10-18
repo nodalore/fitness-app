@@ -1,8 +1,8 @@
 import type { Exercise, RoutineDocument } from './types'
-import { defaultProfile } from '../profile/profile'
+import { defaultProfile, equipmentDetails } from '../profile/profile'
 
 // Synthetic fixtures for unit tests; production reads the actual seeded catalog.
-export const testProfile = { ...defaultProfile, equipment: ['bodyweight', 'dumbbell', 'machine', 'barbell'] }
+export const testProfile = { ...defaultProfile, equipment: ['bodyweight', 'dumbbell', 'machine', 'barbell'], equipment_details: Object.keys(equipmentDetails) }
 export const testCatalog: Exercise[] = [
   ['bodyweight-squat', 'squat', 'bodyweight'], ['goblet-squat', 'squat', 'dumbbell'],
   ['dumbbell-rdl', 'hinge', 'dumbbell'], ['barbell-rdl', 'hinge', 'barbell'],

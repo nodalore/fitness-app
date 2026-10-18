@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
+import { recommendRoutines } from '../../src/features/routines/recommendations'
+import { defaultProfile, equipmentDetails } from '../../src/features/profile/profile'
+import type { Exercise } from '../../src/features/routines/types'
+import expansion from '../../src/data/catalog-expansion.json'
 import { beforeAll, afterAll, test, expect } from 'vitest'
 
 let db: PGlite
@@ -32,6 +36,9 @@ beforeAll(async () => {
   const { training_days_per_week, equipment_details, ...rest } = after
   expect(rest).toEqual(old)
   expect(training_days_per_week).toBeNull(); expect(equipment_details).toBeNull()
+  const oldCatalog = (await db.query('select * from exercises order by id')).rows
+  await migration('202610180005_catalog_expansion.sql')
+  expect((await db.query("select * from exercises where id < '20000000-0000-4000-8000-000000000013' order by id")).rows).toEqual(oldCatalog)
 }, 30000)
 afterAll(async () => { await db?.close() })
 
@@ -57,4 +64,32 @@ test('old-client writes retain confirmed frequency and invalid details fail', as
   expect(rows[0].training_days_per_week).toBe(4)
   await expect(asUser(A,'update profiles set equipment_details=$1 where user_id=$2',[['imaginary_machine'],A])).rejects.toThrow()
   await expect(asUser(A,'update profiles set equipment_details=$1 where user_id=$2',[[null],A])).rejects.toThrow()
+})
+
+
+test('catalog upgrade adds 18 complete entries with sources and honest alternatives', async () => {
+  expect((await db.query('select * from exercises')).rows).toHaveLength(30)
+  expect((await db.query('select * from evidence_sources')).rows).toHaveLength(10)
+  expect((await db.query('select e.id from exercises e left join exercise_alternatives a on a.exercise_id=e.id where a.exercise_id is null')).rows).toHaveLength(0)
+  expect((await db.query('select e.id from exercises e, unnest(e.evidence_source_ids) source left join evidence_sources s on s.id=source where s.id is null')).rows).toHaveLength(0)
+  expect((await db.query('select * from exercises where char_length(technique_notes)<20')).rows).toHaveLength(0)
+  expect(expansion.exercises).toHaveLength(18)
+})
+test('expanded reference data remains read-only to browser roles', async () => {
+  for (const role of [null,A]) {
+    expect((await asUser(role,'select * from exercises')).rows).toHaveLength(30)
+    await expect(asUser(role,"update exercises set name='Forged'")).rejects.toThrow(/permission denied/)
+    await expect(asUser(role,"delete from evidence_sources")).rejects.toThrow(/permission denied/)
+  }
+})
+test('all goal/experience/frequency plans from actual upgraded SQL save through installed RPC', async () => {
+  const catalog = (await db.query<Exercise>('select * from exercises')).rows
+  for (const goal of ['general_fitness','strength','muscle_growth']) for (const experience of ['beginner','intermediate','advanced']) for (const count of [2,3,4,5,6]) {
+    const result = recommendRoutines({ ...defaultProfile, goal, experience, training_days_per_week:count, equipment:['dumbbell','barbell','machine','band'], equipment_details:Object.keys(equipmentDetails) },catalog)
+    expect(result.options).toHaveLength(2)
+    for (const option of result.options) {
+      const id = crypto.randomUUID()
+      await asUser(A,'select fitness_save_routine($1,$2::jsonb,$3,null)',[id,JSON.stringify(option.document),crypto.randomUUID()])
+    }
+  }
 })

@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { weekdays, type ProfileDraft } from '../profile/profile'
+import { ExerciseInfo } from './ExerciseInfo'
 import { compatible, prescription } from './recommendations'
 import { validateRoutine } from './routineValidation'
 import type { Exercise, Prescription, RoutineDayDraft, RoutineDocument } from './types'
@@ -54,9 +55,9 @@ export function RoutineEditor({ initial, catalog, profile, onSave, onCancel }: P
             return <div className="exercise-editor" key={exerciseIndex}>
               <label>{label}<select value={item.exercise_id} onChange={event => {
                 const chosen = catalog.find(entry => entry.id === event.target.value)!
-                changeExercise(dayIndex, exerciseIndex, prescription(chosen, profile))
+                changeExercise(dayIndex, exerciseIndex, prescription(chosen, { ...profile, goal: document.goal }))
               }}>{catalog.map(entry => <option key={entry.id} value={entry.id}>{entry.name}{compatible(entry, profile) ? '' : ' · other equipment'}</option>)}</select></label>
-              <p className="exercise-note">{exercise?.technique_notes} {exercise && !compatible(exercise, profile) ? 'This exercise needs equipment not selected in your profile.' : ''}</p>
+              <div className="exercise-note">{exercise && <ExerciseInfo exercise={exercise} />} {exercise && !compatible(exercise, profile) ? 'This exercise needs equipment not selected in your profile.' : ''}</div>
               <div className="prescription-fields">{([
                 ['Sets', 'target_sets', 10], ['Minimum reps', 'rep_min', 100], ['Maximum reps', 'rep_max', 100], ['Rest seconds', 'rest_seconds', 900],
               ] as const).map(([name, field, max]) => <label key={field}>{name}<input aria-label={`${label}: ${name}`} type="number" min={1} max={max} step={1} required value={item[field]} onChange={event => changeExercise(dayIndex, exerciseIndex, { [field]: Number(event.target.value) })} /></label>)}</div>
@@ -66,7 +67,7 @@ export function RoutineEditor({ initial, catalog, profile, onSave, onCancel }: P
           })}
           <button type="button" className="secondary-button" disabled={!catalog.length || day.exercises.length >= 20} onClick={() => {
             const exercise = catalog.find(entry => compatible(entry, profile)) ?? catalog[0]
-            changeDay(dayIndex, { ...day, exercises: [...day.exercises, prescription(exercise, profile)] })
+            changeDay(dayIndex, { ...day, exercises: [...day.exercises, prescription(exercise, { ...profile, goal: document.goal })] })
           }}>Add exercise to workout {dayIndex + 1}</button>
         </fieldset>)}
         <div className="inline-actions"><button type="button" className="secondary-button" disabled={document.days.length >= 7} onClick={() => setDocument({ ...document, days: [...document.days, { name: `Workout ${document.days.length + 1}`, weekday: null, exercises: [] }] })}>Add workout day</button><button type="submit">{busy ? 'Saving routine…' : 'Save routine'}</button><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button></div>
