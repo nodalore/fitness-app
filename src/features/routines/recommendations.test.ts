@@ -12,7 +12,7 @@ describe.each(['general_fitness','strength','muscle_growth'])('%s programming', 
     test.each([2,3,4,5,6])('%s requested sessions produce feasible, saved-compatible workloads', training_days_per_week => {
       const profile = { ...testProfile, goal, experience, training_days_per_week }
       const result = recommendRoutines(profile, catalog)
-      expect(result.options).toHaveLength(2)
+      expect(result.options.length).toBeGreaterThanOrEqual(2)
       for (const option of result.options) {
         expect(option.document.recommendation_version).toBe(RECOMMENDATION_VERSION)
         expect(validateRoutine(option.document,catalog)).toBeNull()
@@ -66,7 +66,7 @@ test('equipment details prevent assuming a full gym, bench or rack', () => {
 })
 test('limited alternatives repeat honestly and no unavailable exercise is invented', () => {
   const result = recommendRoutines({ ...testProfile, equipment:['dumbbell'], training_days_per_week:2 }, testCatalog)
-  expect(result.options).toHaveLength(2)
+  expect(result.options.length).toBeGreaterThanOrEqual(2)
   expect(result.limitations.join(' ')).toContain('repeat')
   expect(choose({ equipment:['bodyweight'],equipment_details:[] }).options).toHaveLength(0)
 })
@@ -85,4 +85,26 @@ test('deprecated catalog records cannot be recommended', () => {
 })
 test.each([{name:''},{days:[]},{goal:'unknown'},{days:[{...testDocument.days[0],exercises:[]}]}])('invalid custom input is rejected: %j', patch => {
   expect(validateRoutine({...testDocument,...patch},catalog)).toEqual(expect.any(String))
+})
+
+test('all broad equipment combinations keep prescriptions inside confirmed requirements', () => {
+  const equipment = ['bodyweight','dumbbell','barbell','machine','band']
+  for (let mask=1; mask<32; mask++) for (const details of [[],testProfile.equipment_details]) for (const training_days_per_week of [2,4,6]) {
+    const profile = { ...testProfile, experience:'advanced', training_days_per_week, equipment: equipment.filter((_,index) => mask & (1 << index)), equipment_details:details }
+    const result = recommendRoutines(profile,catalog)
+    for (const option of result.options) for (const day of option.document.days) for (const item of day.exercises) {
+      const exercise = catalog.find(entry => entry.id === item.exercise_id)!
+      expect(compatible(exercise,profile)).toBe(true)
+      expect(exercise.deprecated_at).toBeNull()
+    }
+  }
+})
+
+
+test('a third option changes main exercise selection, not just labels or working sets', () => {
+  const result = choose({ experience:'advanced', goal:'muscle_growth', training_days_per_week:4 })
+  expect(result.options).toHaveLength(3)
+  expect(result.options[2].document.assumptions.exercise_selection).toBe('alternate')
+  expect(result.options[2].document.days.map(day => day.exercises.map(item => item.exercise_id))).not.toEqual(result.options[1].document.days.map(day => day.exercises.map(item => item.exercise_id)))
+  expect(result.options[2].document.assumptions.weekly_pattern_sets).toEqual(result.options[1].document.assumptions.weekly_pattern_sets)
 })

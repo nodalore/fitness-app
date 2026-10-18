@@ -42,6 +42,14 @@ function roles(count: number): Role[] {
   return [role('Push A','push',push),role('Pull A','pull',pull),role('Legs A','legs',legs),role('Push B','push',push),role('Pull B','pull',pull),role('Legs B','legs',legs)]
 }
 
+function weeklyBudget(profile: ProfileDraft, pattern: string, lighter: boolean) {
+  if (profile.experience === 'beginner') return lighter ? 2 : 4
+  if (!mainPatterns.includes(pattern)) return lighter ? 2 : 4
+  if (profile.goal === 'general_fitness' || profile.experience === 'intermediate') return lighter ? 4 : 6
+  if (lighter) return 6
+  return profile.goal === 'muscle_growth' ? 10 : 8
+}
+
 export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): { options: Recommendation[]; limitations: string[] } {
   if (validateProfile(profile, true)) return { options: [], limitations: ['Confirm your profile and training frequency (2–6) before generating plans. Saved routines are unchanged.'] }
   const requested = profile.training_days_per_week!
@@ -60,7 +68,7 @@ export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): {
   if (repeat.length) limitations.push('Some movements repeat because only one suitable option is available. Keep these anchors consistent for progression.')
   const recovery = 'Choose your training days. Allow recovery before training the same muscles again; insert rest days as needed. After a missed day, continue the workout order rather than doubling sessions.'
   const effort = 'Use a challenging load you can control. Leave a few reps in reserve; no 1RM test or failure training is required. Experience does not establish your current strength or recovery.'
-  const build = (lighter: boolean): Recommendation => {
+  const build = (lighter: boolean, alternate = false): Recommendation => {
     const familyOccurrences: Record<string, number> = {}
     const chosen = planRoles.map(role => {
       const variant = familyOccurrences[role.family] ?? 0
@@ -68,12 +76,12 @@ export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): {
       return role.patterns.flatMap(pattern => {
         let candidates = pool.filter(exercise => exercise.movement_pattern === pattern)
         // Never rotate back to an unloaded squat to manufacture variety.
-        if (profile.experience !== 'beginner' && candidates.some(exercise => exercise.loading_mode !== 'bodyweight')) candidates = candidates.filter(exercise => exercise.loading_mode !== 'bodyweight')
+        if ((profile.experience !== 'beginner' || alternate) && candidates.some(exercise => exercise.loading_mode !== 'bodyweight')) candidates = candidates.filter(exercise => exercise.loading_mode !== 'bodyweight')
         candidates.sort((a,b) => suitabilityScore(b,profile) - suitabilityScore(a,profile) || a.slug.localeCompare(b.slug))
         if (!candidates.length) return []
         // Strength anchors stay specific; variation comes from accessories and emphasis.
-        const fixed = profile.goal === 'strength' && ['squat','horizontal_push','hinge'].includes(pattern)
-        return [candidates[fixed ? 0 : variant % Math.min(2,candidates.length)]]
+        const fixed = !alternate && profile.goal === 'strength' && ['squat','horizontal_push','hinge'].includes(pattern)
+        return [candidates[fixed ? 0 : (variant + (alternate ? 1 : 0)) % Math.min(2,candidates.length)]]
       })
     })
     const occurrences: Record<string, number> = {}
@@ -85,10 +93,9 @@ export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): {
       name: planRoles[index].name, weekday: null,
       exercises: exercises.map(exercise => {
         const pattern = exercise.movement_pattern
-        const main = mainPatterns.includes(pattern)
         const novice = profile.experience === 'beginner'
         // Weekly budget is distributed across exposures, not multiplied by days.
-        const budget = novice ? lighter ? 2 : 4 : main ? profile.goal === 'general_fitness' ? lighter ? 4 : 6 : profile.experience === 'advanced' ? lighter ? 6 : profile.goal === 'muscle_growth' ? 10 : 8 : lighter ? 4 : 6 : lighter ? 2 : 4
+        const budget = weeklyBudget(profile, pattern, lighter)
         const position = used[pattern] ?? 0
         used[pattern] = position + 1
         const sets = Math.max(1, Math.min(novice ? 2 : profile.experience === 'advanced' ? 4 : 3, Math.floor(budget / occurrences[pattern]) + (position < budget % occurrences[pattern] ? 1 : 0)))
@@ -103,15 +110,15 @@ export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): {
       if (index > 0 && day.name.endsWith('B') && profile.goal === 'strength') day.exercises = [...day.exercises.slice(1), day.exercises[0]]
     })
     const split = count <= 3 ? 'Full body' : count === 4 ? 'Upper / lower' : count === 5 ? 'Upper / lower + PPL' : 'Push / pull / legs'
-    const key = `${count <= 3 ? 'full-body' : `split-${count}`}-${lighter ? 'foundation' : 'standard'}`
-    const rationale = `${count} sessions · ${profile.experience} · ${profile.goal.replaceAll('_',' ')}. ${lighter ? 'Lower weekly volume.' : 'More working sets.'} Main exercises stay stable across weeks.`
+    const key = `${count <= 3 ? 'full-body' : `split-${count}`}-${alternate ? 'alternate' : lighter ? 'foundation' : 'standard'}`
+    const rationale = `${count} sessions · ${profile.experience} · ${profile.goal.replaceAll('_',' ')}. ${alternate ? 'Alternate main exercises at standard volume.' : lighter ? 'Lower weekly volume.' : 'More working sets.'} Main exercises stay stable across weeks.`
     const cautions = [...limitations, recovery, effort, 'Sets, reps, rest and split choices are editable app defaults. Primary-muscle set totals exclude secondary involvement and are not a guarantee of growth.']
     return { key, rationale, cautions, weeklySets, document: {
-      name: `${split} · ${lighter ? 'foundation' : 'standard'}`, goal: profile.goal,
+      name: `${split} · ${alternate ? 'alternate' : lighter ? 'foundation' : 'standard'}`, goal: profile.goal,
       origin_template_key: key, recommendation_version: RECOMMENDATION_VERSION,
       assumptions: {
         profile: { goal: profile.goal, experience: profile.experience, training_days_per_week: requested, equipment: [...profile.equipment], equipment_details: [...(profile.equipment_details ?? [])] },
-        sessions_per_week: count, review_after_weeks: profile.timeline_weeks,
+        sessions_per_week: count, exercise_selection: alternate ? 'alternate' : 'primary', review_after_weeks: profile.timeline_weeks,
         weekly_primary_sets: weeklySets, weekly_pattern_sets: weeklyPatternSets,
         limitations: [...limitations], recovery, effort, source_urls: guidanceSources.map(source => source.url),
         guidance: 'Review at your chosen timeline; results are not guaranteed. Initial volume may be below higher-volume hypertrophy targets. Increase gradually based on recovery, not experience label alone.',
@@ -119,7 +126,12 @@ export function recommendRoutines(profile: ProfileDraft, catalog: Exercise[]): {
     } }
   }
   const seen = new Set<string>()
-  const options = [build(true),build(false)].filter(option => {
+  const standard = build(false)
+  const alternate = build(false, true)
+  const mainSelection = (option: Recommendation) => JSON.stringify(option.document.days.map(day => day.exercises.filter(item => mainPatterns.includes(pool.find(exercise => exercise.id === item.exercise_id)!.movement_pattern)).map(item => item.exercise_id)))
+  const candidates = [build(true), standard]
+  if (mainSelection(standard) !== mainSelection(alternate)) candidates.push(alternate)
+  const options = candidates.filter(option => {
     const signature = JSON.stringify(option.document.days)
     if (seen.has(signature)) return false
     seen.add(signature); return true

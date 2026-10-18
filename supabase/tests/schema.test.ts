@@ -260,7 +260,7 @@ test('recommendations generated from the actual seed can all be saved atomically
   const catalog = (await db.query<Exercise>('select * from public.exercises')).rows
   for (const goal of ['general_fitness', 'strength', 'muscle_growth']) {
     const result = recommendRoutines({ ...defaultProfile, goal, experience: 'intermediate', equipment: ['dumbbell', 'barbell', 'machine'], equipment_details: ['bench','stable_support','chest_press','seated_row','shoulder_press'], training_days_per_week: 3, available_weekdays: [1,2,4,5] }, catalog)
-    expect(result.options).toHaveLength(2)
+    expect(result.options).toHaveLength(3)
     for (const option of result.options) {
       expect(validateRoutine(option.document, catalog)).toBeNull()
       await asUser(A, async () => {

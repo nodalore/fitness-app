@@ -4,9 +4,9 @@ import { supabaseConfiguration } from './lib/supabase'
 import { AuthProvider, useAuth } from './features/auth/AuthProvider'
 import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, CallbackPage } from './features/auth/AuthPages'
 import { ProfilePage } from './features/profile/ProfilePage'
-import { DashboardPage } from './features/dashboard/DashboardPage'
 import { Icon, TrainingImage } from './components/ui'
 
+const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then(module => ({ default: module.DashboardPage })))
 const RoutinesPage = lazy(() => import('./features/routines/RoutinesPage').then(module => ({ default: module.RoutinesPage })))
 
 function Home() {
@@ -99,7 +99,7 @@ function AppShell() {
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="header"><Link className="brand" to={session ? '/dashboard' : '/'} aria-label="Fitness App home"><span className="brand-mark" aria-hidden="true"><Icon name="strength" /></span> Fitness App<span className="brand-dot">.</span></Link><nav aria-label="Main navigation">{!session && <NavLink to="/" end>Home</NavLink>}<NavLink to="/about">Our approach</NavLink><AccountNavigation /></nav></header>
     {session && <aside className="app-sidebar"><p className="eyebrow">TRAINING</p><nav aria-label="Your training">{links.map(link => <Link key={link.to} to={link.to} aria-current={`${pathname}${hash}` === link.to ? 'page' : undefined}><Icon name={link.icon} /><span>{link.label}</span></Link>)}</nav><div className="sidebar-note"><span className="eyebrow">STAY CONSISTENT</span><p>Show up.<br />Put in the work.</p><Link to="/about">Training guide ↗</Link></div></aside>}
-    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/profile" element={<ProfilePage />} /><Route path="/routines" element={<Suspense fallback={<p role="status">Loading routines…</p>}><RoutinesPage /></Suspense>} /><Route path="*" element={<NotFound />} /></Routes></main>
+    <main id="main" ref={mainRef} tabIndex={-1}><Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/auth/forgot-password" element={<ForgotPasswordPage />} /><Route path="/auth/reset-password" element={<ResetPasswordPage />} /><Route path="/auth/callback" element={<CallbackPage />} /><Route path="/dashboard" element={<Suspense fallback={<p role="status">Loading dashboard…</p>}><DashboardPage /></Suspense>} /><Route path="/profile" element={<ProfilePage />} /><Route path="/routines" element={<Suspense fallback={<p role="status">Loading routines…</p>}><RoutinesPage /></Suspense>} /><Route path="*" element={<NotFound />} /></Routes></main>
     <footer><span>Fitness App</span><span>Stage 3 · Routine planning</span></footer>
   </div>
 }

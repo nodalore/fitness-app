@@ -1,6 +1,6 @@
 # Fitness App — MVP specification
 
-Status updated 2026-10-18: existing React + TypeScript + Vite + Supabase application; Stages 1–3 implemented. The user confirms successful execution of all three hosted Supabase migrations, including `202610170003_routine_save.sql`. Full live routine-saving/persistence and signed-in user-isolation verification remain pending. Comprehensive Stage 3 refinements are specified below; implementation awaits approval of the plan in §18. Stage 4 and later are not authorized.
+Status updated 2026-10-18: existing React + TypeScript + Vite + Supabase application; Stages 1–3 implemented. The user confirms successful execution of all three hosted Supabase migrations, including `202610170003_routine_save.sql`. Full live routine-saving/persistence and signed-in user-isolation verification remain pending. The approved Stage 3 refinements are implemented and tested locally. New migrations 004/005 are prepared for explicit hosted review/approval; they have not been applied hosted. See §19 and docs/STAGE_3_REFINEMENT.md. Stage 4 and later are not authorized.
 Prepared: 2026-10-17; refinement requirements and evidence review: 2026-10-18.
 
 Current-state precedence: this status and §18 supersede older migration-installation instructions in `docs/STAGE_3.md` and historical review documents. Do not rerun migrations 001–003. Historical checkpoints below describe previous work, not permission for new implementation or hosted changes.
@@ -75,7 +75,7 @@ RPCs: copy template/create routine, replace routine structure, start session fro
 
 ## 6. Recommendation rules and exercise guidance
 
-Rules are product heuristics informed by evidence, not a validated clinical algorithm. Each returned recommendation includes rule version, selected inputs, rationale, and links to relevant guidance. The following is the refinement target pending implementation approval; the current `rules-1.0` behavior is diagnosed in §18.
+Rules are product heuristics informed by evidence, not a validated clinical algorithm. Each returned recommendation includes rule version, selected inputs, rationale, and links to relevant guidance. The following is implemented as `rules-2.0`; the superseded `rules-1.0` behavior is diagnosed historically in §18.
 
 - Filter by confirmed equipment, movement requirements, and experience suitability before ranking by goal and weekly session count (2–6). Use ordered Full Body A/B/C, Upper Body A/B, Lower Body A/B, or Push/Pull/Legs A/B workouts without fixed weekdays. Provide recovery guidance; do not infer readiness from a free day.
 - Provide up to 2–3 meaningfully distinct feasible options with explicit tradeoffs; deduplicate equivalent prescriptions. Prefer the requested session count when suitable; explain and label any lower-frequency alternative, especially for beginners requesting 5–6 sessions. Never silently cap plans at four sessions or manufacture variety when equipment is limited. Legacy 1- or 7-day profiles require confirmation of a new 2–6 preference; existing routines remain usable.
@@ -140,17 +140,17 @@ Original sources checked 2026-10-17; additional publication-level review and lim
 
 ## 12. Approval and external setup dependencies
 
-The architecture and existing Stages 1–3 implementation were previously authorized. All three hosted migrations are now successfully executed according to the user. The current request authorizes only research and updates to SPEC.md and NOTES.md. Wait for approval of the refinement plan in §18 before changing application code, dependencies, migrations, or seeds. Future hosted SQL requires separate explicit review/approval. Stage 4 and later require explicit approval.
+The architecture and existing Stages 1–3 implementation were previously authorized. All three hosted migrations are now successfully executed according to the user. The user approved the refinement plan and local implementation, including tested Git commits. New migration SQL is prepared locally; no hosted changes are authorized without separate review/approval. Future hosted SQL requires separate explicit review/approval. Stage 4 and later require explicit approval.
 
 A real deployment requires access to a user-owned Supabase project (project URL, publishable key, and an approved secure path for migrations), production email configuration, and Sites hosting permissions. No connected Supabase provisioning tool is currently exposed. Verify the available CLI/dashboard authentication after approval; if unavailable, prepare migrations and exact setup steps and request the minimum required connection. Never ask for secret keys in chat. Service costs and plan limits must be checked before any paid provisioning; no paid resource purchase is included in plan approval. Public hosting exposes the app's entry pages, while individual workout records remain private.
 
 ## 13. Approved implementation priorities
 
-Preserve the working frontend, authentication, Supabase persistence, profile data, and routine management. The immediate priority is comprehensive Stage 3 refinement under §18, pending implementation-plan approval; full hosted acceptance remains open. Workout logging/substitutions, comparisons and public deployment remain later-stage MVP goals, not authorization for current work. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Keep the catalog curated and expand only for demonstrated recommendation gaps. Postpone advanced charts, countdown timers, and extensive filtering. No hosted changes are authorized by this documentation update.
+Preserve the working frontend, authentication, Supabase persistence, profile data, and routine management. The immediate priority is comprehensive Stage 3 refinement under §18, implemented locally; full hosted acceptance remains open. Workout logging/substitutions, comparisons and public deployment remain later-stage MVP goals, not authorization for current work. All project file operations stay inside `~/fitness-app`, including npm cache and build artifacts. Keep the catalog curated and expand only for demonstrated recommendation gaps. Postpone advanced charts, countdown timers, and extensive filtering. No new hosted changes are authorized without separate explicit approval.
 
 ## 14. Persistent frontend design requirements
 
-The 2026-10-18 redesign request replaces the earlier paper/ink/vermilion training-journal direction across the existing interface. Implementation awaits plan approval; preserve the current React application and Supabase behavior.
+The 2026-10-18 redesign request replaces the earlier paper/ink/vermilion training-journal direction across the existing interface. The redesign is implemented locally; preserve the current React application and Supabase behavior.
 
 - Create an original premium fitness identity inspired by [Elevate: Your Ultimate Fitness Companion, Majarul Islam](https://dribbble.com/shots/25204004-Elevate-Your-Ultimate-Fitness-Companion). Do not copy its layout, branding, text, illustrations, or photography. The reference's indexed description was accessible during planning; direct visual-page access was limited. Complete visual review before implementing layouts.
 - Use dark backgrounds, charcoal cards, warm beige accents, elegant readable typography, rounded components, and restrained depth. Define shared color, type, spacing, radius, elevation, motion, and focus tokens. Proposed starting palette: background `#111111`, surface `#202020`, raised surface `#2B2B2B`, accent `#DCC9AD`, text `#F5F0E8`; verify actual text and control combinations for contrast before use.
@@ -185,11 +185,11 @@ Migration 003 now also replaces the existing timestamp helper: routine updates u
 
 Verification: 216 automated tests including 122 isolated PostgreSQL checks, TypeScript, production build, and six real multi-connection tests on disposable local PostgreSQL passed. Development-only embedded PostgreSQL was added for the concurrency tests; all its data, temporary files, and sockets remain within ignored `.test-postgres/` under the project. Stage 4 remains unstarted.
 
-## 18. Stage 3 refinement proposal — awaiting implementation approval
+## 18. Approved Stage 3 refinement plan
 
 ### Authorization and preservation
 
-This update changes documentation only. Do not change application code, dependencies, SQL migrations, seeds, or the hosted database until the user approves the implementation plan. Plan approval will authorize local implementation; applying any new hosted migration or reference-data update requires a separate explicit review/approval. Keep all filesystem operations inside `~/fitness-app`. Do not start Stage 4.
+The user approved this plan and local implementation. Profile, rules, catalog proposal and mobile refinements are implemented locally, with tested Git milestones. Applying any new hosted migration or reference-data update still requires separate explicit review/approval. Keep all filesystem operations inside `~/fitness-app`. Do not start Stage 4.
 
 Preserve authentication/session recovery, Supabase clients/configuration, existing profile fields and values, saved routine IDs and prescriptions, RLS, ownership foreign keys, atomic-save validation, retry receipts, exact optimistic-concurrency timestamps, archive behavior, and history-preserving versions. Do not reset, reseed, or rebuild the application. Never regenerate saved routines automatically when profile inputs or recommendation rules change.
 
@@ -272,4 +272,17 @@ Acceptance gates:
 - Verify desktop/mobile layouts, keyboard and screen-reader flows, contrast, reduced motion, loading/empty/error states, auth callbacks, profile saves and routine create/customize/edit/reorder/archive/reload. Photography licenses/provenance must be recorded before release.
 - Hosted acceptance remains explicitly pending until observed: save/create/edit/archive, failed-request retry without duplication, refresh and sign-out/in persistence, and two-account read/write isolation including RPC attempts. Local mocks and PostgreSQL identity emulation are not hosted verification. Use existing rollback-only SQL scripts with user-controlled test identities; never ask for passwords in chat.
 
-Approval checkpoint: approve or amend this Stage 3 refinement plan before implementation. Approval of this plan alone does not authorize applying new hosted SQL, deployment, purchases, or Stage 4.
+Implementation-plan approval received. Local refinement work is complete subject to final review; hosted SQL, deployment, purchases, and Stage 4 still require separate approval.
+
+
+## 19. Stage 3 refinement implementation checkpoint — 2026-10-18
+
+The approved interface/copy, 2–6 frequency questionnaire, compatible legacy-profile reads, explicit equipment confirmations, `rules-2.0` workout roles/rankings/budgets, exercise arrows with descriptions and original schematics, and mobile navigation/readability fixes are implemented locally. New routine workouts are unscheduled and ordered; existing profile values, weekday arrays, saved routine IDs/prescriptions/receipts and history are retained. No training-session logger, completion tracking or automatic load progression was added.
+
+Two additive migrations are prepared: `202610180004_profile_frequency.sql` adds nullable checked frequency and equipment details without backfill; `202610180005_catalog_expansion.sql` adds 18 exercises, seven source records and 18 directional alternatives without overwriting existing seed rows. The installed RPC signature/semantics and existing policies/grants are unchanged. Production recommendations only use live catalog records. **Neither new migration has been approved/applied hosted.** Missing profile columns produce an actionable save error; equipment/catalog gaps are explained.
+
+Implementation choices and source-to-rule boundaries are in `docs/RECOMMENDATION_EVIDENCE.md`; review and manual upgrade steps are in `docs/STAGE_3_REFINEMENT.md`. ACSM's 2026 full text became accessible during implementation, updating the earlier abstract-only access note in §18. Exercise schematics are original general pattern illustrations, not photographs or a technique assessment. Experience affects suitability/workload starting choices but cannot establish individual strength or prescribe load.
+
+Verification: 290 tests across 16 files, including populated-schema upgrade, original auth/routine/RLS suites and 135 generated documents saved through the actual RPC in local PostgreSQL; TypeScript and production build pass. Six native multi-connection scenarios pass. The exact user-approved isolated screenshot script was rerun unchanged at 1440/390 pixels; all six pages have no horizontal overflow, mobile navigation no longer overlays controls, and supporting text is larger. Browser auth/config/repositories are mocked with remote requests blocked. Main bundle size has a non-blocking build advisory.
+
+Hosted confirmation remains separate: review/approve and install 004/005 through SQL Editor, then verify profile/routine create/edit/archive/retry, refresh/sign-out/in persistence and two-account read/write/RPC isolation. Live recovery/email and full manual assistive-technology checks also remain open. No hosted Supabase data was accessed or changed during refinement. Stage 4 remains unstarted and requires separate authorization.

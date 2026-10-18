@@ -10,7 +10,7 @@ export function RoutinePlan({ document, catalog }: { document: RoutineDocument; 
     <ol className="exercise-list">{day.exercises.map((item, itemIndex) => <li key={itemIndex}>
       {catalog.find(exercise => exercise.id === item.exercise_id) ? <ExerciseInfo exercise={catalog.find(exercise => exercise.id === item.exercise_id)!} /> : <h5>Library exercise unavailable</h5>}
       <div className="prescription-summary"><Badge>{item.target_sets} sets</Badge><Badge>{item.rep_min}–{item.rep_max} reps</Badge><Badge>{item.rest_seconds}s rest</Badge></div>
-      {item.notes && <p>{item.notes}</p>}
+      {item.notes && item.notes !== catalog.find(exercise => exercise.id === item.exercise_id)?.technique_notes && <p>{item.notes}</p>}
     </li>)}</ol>
   </details>)}</div>
 }

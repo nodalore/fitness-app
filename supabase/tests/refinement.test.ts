@@ -86,7 +86,7 @@ test('all goal/experience/frequency plans from actual upgraded SQL save through 
   const catalog = (await db.query<Exercise>('select * from exercises')).rows
   for (const goal of ['general_fitness','strength','muscle_growth']) for (const experience of ['beginner','intermediate','advanced']) for (const count of [2,3,4,5,6]) {
     const result = recommendRoutines({ ...defaultProfile, goal, experience, training_days_per_week:count, equipment:['dumbbell','barbell','machine','band'], equipment_details:Object.keys(equipmentDetails) },catalog)
-    expect(result.options).toHaveLength(2)
+    expect(result.options).toHaveLength(3)
     for (const option of result.options) {
       const id = crypto.randomUUID()
       await asUser(A,'select fitness_save_routine($1,$2::jsonb,$3,null)',[id,JSON.stringify(option.document),crypto.randomUUID()])

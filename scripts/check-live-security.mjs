@@ -10,7 +10,8 @@ if (!url?.startsWith('https://') || !key?.startsWith('sb_publishable_')) {
   process.exit(1)
 }
 const owned = ['profiles', 'routines', 'routine_days', 'routine_exercises', 'workout_sessions', 'session_exercises', 'workout_sets']
-const catalogs = [['exercises', 12], ['exercise_alternatives', 12], ['evidence_sources', 3]]
+const expanded = process.argv.includes('--expanded-catalog')
+const catalogs = [['exercises', expanded ? 30 : 12], ['exercise_alternatives', expanded ? 30 : 12], ['evidence_sources', expanded ? 10 : 3]]
 let failed = false
 try {
   for (const table of owned) {
