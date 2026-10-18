@@ -7,7 +7,7 @@ function editableAssumptions(value: Record<string, unknown> | null) {
   return Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => !['_save_receipts', '_save_request_id', '_save_payload_hash'].includes(key)))
 }
 
-type RoutineRowDay = { name: string; weekday: number | null; position: number; routine_exercises: { position: number; exercise_id: string; custom_exercise_name: string | null; planning_mode: string; target_sets: number; rep_min: number; rep_max: number; rest_seconds: number; notes: string; routine_planned_sets?: (PlannedSet & {position: number})[] }[] }
+type RoutineRowDay = { id?: string; name: string; weekday: number | null; position: number; routine_exercises: { position: number; exercise_id: string; custom_exercise_name: string | null; planning_mode: string; target_sets: number; rep_min: number; rep_max: number; rest_seconds: number; notes: string; routine_planned_sets?: (PlannedSet & {position: number})[] }[] }
 
 const failure = 'Unable to load routines. Check your connection and database setup, then retry.'
 export async function loadWorkspace(client: SupabaseClient, userId: string): Promise<{ profile: ProfileDraft | null; catalog: Exercise[]; routines: SavedRoutine[] }> {
@@ -31,6 +31,7 @@ export async function loadWorkspace(client: SupabaseClient, userId: string): Pro
     profile: profile.data ? normalizeProfile(profile.data) : null, catalog: catalog.data ?? [],
     routines: (routines.data ?? []).map(row => ({
       id: row.id, updated_at: row.updated_at, archived_at: row.archived_at,
+      dayIds: [...row.routine_days].sort((a, b) => a.position - b.position).map((day: RoutineRowDay) => day.id ?? ''),
       document: {
         name: row.name, goal: row.goal, origin_template_key: row.origin_template_key,
         recommendation_version: row.recommendation_version, assumptions: editableAssumptions(row.assumptions),

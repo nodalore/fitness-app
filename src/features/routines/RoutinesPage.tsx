@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router'
 import { useAuth } from '../auth/AuthProvider'
 import { Badge, PageHeading } from '../../components/ui'
@@ -6,6 +6,8 @@ import { RoutinePlan } from './RoutinePlan'
 import { guidanceSources, recommendRoutines } from './recommendations'
 import { archiveRoutine, deleteRoutine, loadWorkspace, saveRoutine } from './repository'
 import { RoutineEditor } from './RoutineEditor'
+import { workoutRepository } from '../workouts/workoutRepository'
+import { TodaysWorkout } from '../workouts/TodaysWorkout'
 import type { RoutineDocument, SavedRoutine } from './types'
 
 type Workspace = Awaited<ReturnType<typeof loadWorkspace>>
@@ -24,6 +26,7 @@ export function RoutinesPage() {
 function RoutineWorkspace({ userId }: { userId: string }) {
   const { client } = useAuth()
   const { hash } = useLocation()
+  const workoutRepo = useMemo(() => client ? workoutRepository(client, userId) : null, [client, userId])
   const savedView = hash === '#saved'
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [error, setError] = useState('')
@@ -110,6 +113,7 @@ function RoutineWorkspace({ userId }: { userId: string }) {
   return <section className="routines-page">
     <PageHeading eyebrow="ROUTINES / YOUR TRAINING SYSTEM" title={savedView ? <>My <em>routines.</em></> : <>Discover your <em>next routine.</em></>} />
     <p role="status" className="save-notice">{notice}</p>{error && <div role="alert"><p>{error}</p>{!preview && <button className="secondary-button" onClick={() => setReload(value => value + 1)}>Reload routines</button>}</div>}
+    {savedView && <div id="saved" tabIndex={-1} hidden={Boolean(editing)}><TodaysWorkout persistence={workoutRepo ? { repository: workoutRepo, userId } : undefined} routines={routines} catalog={catalog} defaultUnit={profile?.display_unit === 'lb' ? 'lb' : 'kg'} /></div>}
     {editing ? <RoutineEditor key={editing.key} initial={editing.document} catalog={catalog} profile={profile} editingExisting={editing.updatedAt !== null} onSave={persist} onCancel={cancel} /> : <>
       <div className="routine-toolbar"><Link className="text-link" to={savedView ? "/routines" : "/routines#saved"}>{savedView ? "Discover routines ↗" : "My routines ↗"}</Link><button className="secondary-button" disabled={busy} onClick={() => { setPreview(false); acceptance.current = null; startEditing({ name: '', goal: profile?.goal ?? 'general_fitness', origin_template_key: null, recommendation_version: null, assumptions: { origin: 'custom' }, days: [{ name: '', weekday: null, exercises: [] }] }) }}>Create My Own Routine</button></div>
       {!savedView && <>
@@ -130,7 +134,7 @@ function RoutineWorkspace({ userId }: { userId: string }) {
       })()}
       </>}
       {savedView && <>
-      <div className="routine-divider" id="saved" tabIndex={-1}><h2>Saved routines <span className="number">/ {String(active.length).padStart(2,'0')}</span></h2></div>
+      <div className="routine-divider"><h2>Saved routines <span className="number">/ {String(active.length).padStart(2,'0')}</span></h2></div>
       {active.length === 0 ? <p>No saved routines yet.</p> : <div className="saved-routines">{active.map(routine => <article key={routine.id} className="saved-routine"><h3>{routine.document.name}</h3><p>{routine.document.days.length} sessions · {routine.document.goal.replaceAll('_',' ')}</p><div className="inline-actions"><button disabled={busy} className="secondary-button" aria-label={`Edit ${routine.document.name}`} onClick={() => { setPreview(false); startEditing(routine.document, routine) }}>Edit</button><button disabled={busy} className="secondary-button" aria-label={`Archive ${routine.document.name}`} onClick={() => { setPreview(false); acceptance.current = null; setDeleteTarget(null); setDeleteError(''); setArchiveTarget(routine); setError('') }}>Archive</button><button disabled={busy} className="secondary-button" aria-label={`Delete ${routine.document.name}`} onClick={() => requestDelete(routine)}>Delete</button></div><details><summary>View plan</summary><RoutinePlan document={routine.document} catalog={catalog} /></details></article>)}</div>}
       {deleteTarget && <section className="delete-confirm" role="alertdialog" aria-modal="false" aria-labelledby="delete-title" aria-describedby="delete-description">
         <h3 id="delete-title" ref={deleteTitleRef} tabIndex={-1}>Permanently delete {deleteTarget.document.name}?</h3><p id="delete-description">This removes the routine and its planned targets. It cannot be undone. Plans linked to workouts are protected; use Archive to retain them.</p>

@@ -30,7 +30,7 @@ export type RoutineDocument = {
   days: RoutineDayDraft[];
 }
 export type SavedRoutine = {
-  id: string; updated_at: string; archived_at: string | null; document: RoutineDocument;
+  id: string; updated_at: string; archived_at: string | null; document: RoutineDocument; dayIds?: string[];
 }
 export type Recommendation = {
   key: string; rationale: string; cautions: string[];

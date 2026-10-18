@@ -67,7 +67,7 @@ try {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to anon,authenticated; grant execute on function auth.uid() to anon,authenticated;`)
   await admin.query('insert into auth.users values ($1),($2)', [A, B])
-  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql','202610180004_profile_frequency.sql','202610180005_catalog_expansion.sql','202610180006_profile_gender.sql','202610180007_custom_planning.sql']) {
+  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql','202610180004_profile_frequency.sql','202610180005_catalog_expansion.sql','202610180006_profile_gender.sql','202610180007_custom_planning.sql','202610180008_workout_saving.sql']) {
     await admin.query(await readFile(resolve(root, 'supabase/migrations', file), 'utf8'))
   }
   console.log(`Local PostgreSQL ${String((await admin.query('show server_version')).rows[0].server_version).split(' ')[0]}; separate connections; Supabase is not used.`)
@@ -217,7 +217,50 @@ try {
   assert.equal((await staleWorkout).error?.code,'23503');await second.query('rollback')
   assert.equal((await admin.query('select count(*)::int as n from workout_sessions where routine_id=$1',[removableId])).rows[0].n,0)
   pass('a workout started after permanent deletion fails safely without orphan history')
-  console.log('12 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
+  currentTest='workout autosave retries and stale writers'
+  const workoutRoutine=randomUUID()
+  await begin(first);await save(first,workoutRoutine);await first.query('commit')
+  const workoutDay=(await admin.query('select id from routine_days where routine_id=$1',[workoutRoutine])).rows[0].id
+  const workoutVersion=await stamp(admin,workoutRoutine)
+  const workoutDocument={id:randomUUID(),routineId:workoutRoutine,routineDayId:workoutDay,routineVersion:workoutVersion,routineName:'Snapshot',sessionName:'Session',dayPosition:0,startedAt:'2026-01-01',exercises:[{id:randomUUID(),exerciseId:null,name:'Custom hip thrust',sourceName:'RDLs',loadingMode:null,target:{},skipped:false,removed:false,sets:[{id:randomUUID(),reps:10,weight:180,unit:'lb'}]}]}
+  const writeWorkout=async(client,value,revision,request,finish=false)=>(await client.query('select fitness_save_workout($1::jsonb,$2,$3,$4,$5) as result',[JSON.stringify(value),revision,request,A,finish])).rows[0].result
+  const workoutRequest=randomUUID()
+  await begin(first);const initialWorkout=await writeWorkout(first,workoutDocument,null,workoutRequest)
+  await begin(second);const repeatedWorkout=writeWorkout(second,workoutDocument,null,workoutRequest).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.deepEqual((await repeatedWorkout).value,initialWorkout);await second.query('commit')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sets where session_exercise_id=$1',[workoutDocument.exercises[0].id])).rows[0].n,1)
+  pass('simultaneous workout start retries create one session and stable set ID')
+
+  const updatedWorkout=structuredClone(workoutDocument);updatedWorkout.exercises[0].sets[0].reps=9
+  await begin(first);const updatedResult=await writeWorkout(first,updatedWorkout,initialWorkout.revision,randomUUID())
+  await begin(second);const staleWorkoutEdit=writeWorkout(second,workoutDocument,initialWorkout.revision,randomUUID()).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await staleWorkoutEdit).error?.code,'40001');await second.query('rollback')
+  pass('competing workout autosaves reject stale revisions without overwriting actual sets')
+
+  currentTest='single workout finish under concurrent retries'
+  const finishRequest=randomUUID()
+  await begin(first);const finishedResult=await writeWorkout(first,updatedWorkout,updatedResult.revision,finishRequest,true)
+  await begin(second);const repeatedFinish=writeWorkout(second,updatedWorkout,updatedResult.revision,finishRequest,true).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.deepEqual((await repeatedFinish).value,finishedResult);await second.query('commit')
+  await begin(first);await assert.rejects(writeWorkout(first,updatedWorkout,finishedResult.revision,randomUUID(),true),error=>error.code==='55000');await first.query('rollback')
+  pass('concurrent finish retries acknowledge one completion; new submissions cannot rewrite it')
+
+  currentTest='direct actual set editing races with finishing'
+  const secondWorkout=structuredClone(workoutDocument);secondWorkout.id=randomUUID();secondWorkout.exercises[0].id=randomUUID();secondWorkout.exercises[0].sets[0].id=randomUUID()
+  await begin(first);const secondInitial=await writeWorkout(first,secondWorkout,null,randomUUID());await first.query('commit')
+  await begin(first);await first.query('update workout_sets set reps=7 where id=$1',[secondWorkout.exercises[0].sets[0].id])
+  await begin(second);const staleFinish=writeWorkout(second,secondWorkout,secondInitial.revision,randomUUID(),true).then(value=>({value}),error=>({error}))
+  await waiting(admin,second);await first.query('commit');assert.equal((await staleFinish).error?.code,'40001');await second.query('rollback')
+  assert.equal((await admin.query('select reps from workout_sets where id=$1',[secondWorkout.exercises[0].sets[0].id])).rows[0].reps,7)
+  pass('direct set edits lock the workout and invalidate a concurrently finishing stale snapshot')
+
+  currentTest='routine version preserves actual workouts and source day'
+  await begin(first);const routineVersion=await save(first,workoutRoutine,{...document,name:'New routine version'},randomUUID(),workoutVersion);await first.query('commit')
+  assert.notEqual(routineVersion,workoutRoutine)
+  assert.equal((await admin.query('select routine_day_id from workout_sessions where id=$1',[workoutDocument.id])).rows[0].routine_day_id,workoutDay)
+  assert.equal((await admin.query('select reps from workout_sets where id=$1',[workoutDocument.exercises[0].sets[0].id])).rows[0].reps,9)
+  pass('routine versioning preserves completed actuals, draft progress and the original source day')
+  console.log('17 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
 } catch (error) {
   // Never output native runner configuration or generated passwords.
   console.error(`FAIL ${currentTest}${error?.code ? ` (code ${error.code})` : ''}. Hosted database was not accessed.`)

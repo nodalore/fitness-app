@@ -462,3 +462,60 @@ footer { display: flex; justify-content: space-between; gap: 24px; border-top: 1
 .exercise-equipment { display: block; color: var(--quiet); font-size: 12px; font-weight: 400; margin-top: 5px; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .recommendation-sessions { grid-template-columns: minmax(0,1fr); } }
 @media (prefers-reduced-motion: no-preference) { .session-panel { animation: reveal .18s ease-out; } }
+
+/* Today's workout: a separate local performance workspace above saved plans. */
+.todays-workout { max-width: 840px; min-width: 0; margin: 24px 0 36px; padding: 24px; border: 1px solid var(--line); border-top: 2px solid var(--plan-accent); border-radius: var(--radius-small); background: linear-gradient(130deg,#d4e0a208,transparent 55%),var(--surface); }
+.today-heading, .today-context { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.today-heading h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; margin-bottom: 10px; }
+.today-heading .eyebrow { margin-bottom: 8px; }
+.today-context { border-top: 1px solid var(--line); padding-top: 18px; margin-top: 18px; }
+.today-context > div { min-width: 0; overflow-wrap: anywhere; }
+.today-context h3 { font-size: 21px; margin: 6px 0 14px; }
+.today-context button { flex-shrink: 0; }
+.today-session-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.today-session { justify-content: flex-start; text-align: left; min-width: 0; }
+.today-session > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.today-session small, .today-exercise-toggle small { display: block; color: var(--quiet); font-size: 12px; font-weight: 400; margin-top: 6px; }
+.today-exercises { list-style: none; margin: 0 0 18px; padding: 0; }
+.today-exercise { border-bottom: 1px solid var(--line); min-width: 0; }
+.today-exercise-toggle { width: 100%; background: transparent; color: var(--text); padding: 18px 0; text-align: left; justify-content: flex-start; }
+.today-exercise-toggle:hover { background: transparent; color: var(--plan-accent); }
+.today-exercise-toggle > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.today-exercise-toggle[aria-expanded=true] { color: var(--plan-accent); }
+.today-exercise.is-skipped .today-exercise-toggle > span:nth-child(2) { color: var(--quiet); }
+.today-exercise-body { padding-bottom: 16px; }
+.actual-sets { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 4px 0 14px; }
+.actual-sets th { color: var(--quiet); font-size: 12px; font-weight: 400; text-align: left; }
+.actual-sets th:first-child { width: 34px; }
+.actual-sets th:nth-child(2) { width: 50%; }
+.actual-sets th:nth-child(4) { width: 44px; text-align: center; }
+.actual-sets td { padding: 6px 4px; }
+.actual-sets input, .actual-sets select { min-width: 0; padding: 10px 6px; border-radius: 6px; }
+.actual-weight { display: grid; grid-template-columns: minmax(0,1fr) 60px; gap: 5px; }
+.actual-sets td:last-child button { width: 100%; min-height: 44px; justify-content: center; font-size: 22px; }
+.today-adjust { margin: 16px 0 0; gap: 18px; }
+.today-adjust button { min-height: 44px; }
+.today-composer, .today-discard { margin-block: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.today-composer h4 { font-size: 17px; }
+.today-discard button { margin-right: 12px; }
+@media (max-width: 600px) {
+  .todays-workout { padding: 16px 12px; }
+  .today-session-grid { grid-template-columns: minmax(0,1fr); }
+  .today-context { flex-wrap: wrap; gap: 0 12px; }
+  .actual-sets th:first-child { width: 24px; }
+  .actual-sets th:nth-child(2) { width: 45%; }
+  .actual-sets th:nth-child(4) { width: 34px; }
+  .actual-sets td { padding-inline: 2px; }
+  .actual-weight { grid-template-columns: minmax(0,1fr); gap: 4px; }
+  .actual-weight select { min-height: 34px; padding: 4px 6px; }
+  .today-heading { flex-wrap: wrap; gap: 4px; }
+}
+
+.workout-save-state { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; font-size: 12px; color: var(--quiet); border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.resume-workouts { margin: 16px 0 24px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.resume-workouts h3 { grid-column: 1/-1; font-size: 17px; margin-bottom: 4px; }
+.resume-workouts button { display: flex; flex-direction: column; align-items: start; text-align: left; overflow-wrap: anywhere; min-width: 0; }
+.resume-workouts small { color: var(--quiet); font-weight: 400; }
+.workout-finish-bar { display: flex; justify-content: flex-end; padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
+.workout-finished { border-left: 2px solid var(--plan-accent); padding: 12px; color: var(--text); }
+@media (max-width: 600px) { .resume-workouts { grid-template-columns: minmax(0,1fr); } .workout-finish-bar button { width: 100%; } }

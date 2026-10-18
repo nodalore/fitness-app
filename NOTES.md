@@ -1,6 +1,51 @@
-# Stage 3 stable checkpoint — 2026-10-18
+# Stage 4 saving/resuming/finishing milestone — 2026-10-18
 
-Stage 3 code is complete and checkpointed independently of the subsequent local Today's Workout work. Migrations 001–007 are installed per user confirmation. Authenticated Stage 3 live acceptance remains pending; this checkpoint does not claim hosted persistence acceptance. No hosted writes or SQL are authorized by checkpointing. Verify this exact Stage 3 tree with the full suite, TypeScript/build and local concurrency tests before creating stage-3-stable.
+**Controlling status:** user approved local implementation/testing of the saving milestone. It is implemented locally. Migration `202610180008_workout_saving.sql` is a reviewed/tested local draft and is **NOT applied hosted**. Installed migrations remain 001–007 per user confirmation. No hosted calls, credentials/account access, SQL execution or data writes occurred in this implementation. Workout History UI must wait until saving/resuming acceptance. No charts/analytics/Stage 5.
+
+## Implemented
+
+- New 008 extends actual workout tables without changing 001–007/planned routine tables/RPCs or backfilling history. Supports custom actual names/unknown loading convention, nullable incomplete draft reps, exact entered weight/unit, original name/target snapshots, skipped/removed dispositions, source version/day metadata and revisions. New FORCE RLS owned receipts and parent-state/child-write guards secure transactional saves, retry tokens, direct writes and completed immutability. Migration preserves populated existing profiles/plans/catalog/history; NOT VALID legacy-compatible constraints check new writes without rejecting stored historical values.
+- New caller-privilege `fitness_save_workout` derives owner from auth.uid(), verifies expected account identity (stale requests cannot write into a subsequently signed-in account), validates real owned routine/day/version, snapshots authoritative names, and saves one complete workout snapshot transactionally with stable session/exercise/set IDs. Shared account advisory locks coordinate with existing routine versioning; per-session locks/revisions serialize direct edits and finishing. Old retry acknowledgments expose current revision/state so queued changes cannot rebase over newer/completed data. Completed workouts reject application edits/deletes. No Done control; new actual rows are performed automatically.
+- Stage 3 repository now exposes saved day IDs outside RoutineDocument; editing/saving routine documents stays unchanged. Today’s Workout uses a serialized 400ms autosave queue, 20s request timeout, status/error/retry UI, account-scoped unsent recovery, unfinished resume list, Save & choose session and Finish confirmation. Finishing requires reps on included sets and at least one actual set; partial workouts and skipped/removed metadata persist. Exact finish retries cannot duplicate or reopen a completed workout. Original routines remain unchanged.
+- Recovery keeps stable pending requests/payloads and newer queued input through refresh/network loss. Confirmed clean saves clear local recovery. Route/account unmount stops new old-account writes, while recovery remains keyed to the original user. No tokens/passwords are stored by recovery. Storage failures are reported. Explicit conflict reload replaces local editing only after confirmation. If no initial server session exists and its source changed, the user can confirm saving the captured snapshot independently (same workout ID, NULL FK links); it checks for an existing server copy first. A workout completed elsewhere remains protected and conflicting unsent edits cannot be merged into history.
+
+## Verification
+
+- `npm run check`: **433 tests / 24 files passed**, TypeScript passed, production build passed. New database/model/repository/queue/recovery/UI regressions cover exact actuals and units, stable IDs, add/edit/remove sets, substitutions/skips/removals/additions, source preservation, populated upgrades, atomic rollback, malformed writes, incomplete finish validation, immutable completed data, anonymous/cross-account denial, stale-account requests, retries/timeouts, lost responses, refresh/resume, single finish, conflict handling and original routine preservation.
+- `npm run test:db:concurrency`: **17 native PostgreSQL 18.4 scenarios passed** after local process/socket permission. Twelve prior checks plus simultaneous workout start retries, competing autosaves, concurrent finish retries, direct-set-edit versus finish, and routine versioning with actual completed/draft data. Disposable fixtures stay inside .test-postgres; no hosted credentials/services used.
+- `git diff --check` passed. Installed 001–007 have no diff. `stage-3-stable` is still **24be6832b37180e8846fbe1c832847238f6599f1**. All pre-existing uncommitted Stage 4 work is retained; no commit/branch reset or history rewrite occurred.
+
+## Stop / remaining work
+
+Read `docs/WORKOUT_SAVING_REVIEW.md`, current `docs/TODAYS_WORKOUT.md` and SPEC.md §22. User must separately review/approve the full 008 SQL before hosted execution. After installation confirmation, obtain permission for dedicated test-account/data writes and observe hosted autosave → refresh/sign-out/in → resume → corrections → finish, plus two-account isolation and retry tests. Local fixtures/mocks are not hosted acceptance. Browser desktop/mobile/zoom/touch/focus checks are unverified; no unsafe Playwright script was executed. Do not run an old mocked Stage 3 browser candidate as proof of live persistence.
+
+**Stop before hosted installation or any Workout History interface.** Its cards/pagination/read-only actual-set detail view are the next milestone only after saving/resuming works and is accepted. Stage 3's earlier signed-in live acceptance also remains pending independently.
+
+---
+
+# Today's Workout — implicit performed sets — 2026-10-18
+
+- Removed the Done column, checkbox, completion flag and reconfirmation logic. Add set now creates a performed-set row directly; users enter/edit weight and reps without an additional check.
+- Exercises, replacements and newly added exercises start with zero actual sets. Planned set counts never create performed rows automatically. Header/card counts show explicitly logged sets, excluding skipped exercises. Removing a set reduces that count; restoring a skipped exercise retains its entered values.
+- Simplified the actual-set table and mobile column widths. Saved routine targets, kg/lb conversion, source snapshots, account clearing and local-only draft boundaries remain unchanged. No hosted SQL/data changes or migration edits.
+- Updated regression tests and SPEC.md §21 / docs/TODAYS_WORKOUT.md. `npm run check`: **391 tests / 19 files passed**, TypeScript and production build passed; `git diff --check` passed. Browser visual acceptance remains pending.
+- Stage 3 backup branch `stage-3-stable` remains at `24be6832b37180e8846fbe1c832847238f6599f1`. These local Stage 4 changes are not added to that checkpoint.
+
+---
+
+# Stage 4 first step — Today's Workout — 2026-10-18
+
+**Latest authorization:** user explicitly approved beginning Stage 4 for Today's Workout only. This supersedes earlier no-Stage-4 instructions only for the frontend/local-test scope. No charts, advanced analytics, other Stage 4 flows, hosted SQL or hosted workout writes are authorized. Migrations 001–007 remain installed per the user; no installed migration was changed.
+
+- Reviewed existing workout_sessions/session_exercises/workout_sets, ownership/RLS/history foreign keys, Stage 3 read/save models and My routines navigation. Explained the approach and custom performed-exercise schema limitation before coding.
+- Added `src/features/workouts/workoutDraft.ts` and `TodaysWorkout.tsx`. My routines now begins with a distinct Today's Workout section; Saved routines remains separate below it. Select active routine → named Day/session → compact single-open exercise cards. No weekday assignment. Discover remains unchanged.
+- Independent snapshot includes source routine ID/exact version/names/day position and original prescriptions; actual exercise identity/name/loading mode and actual sets are separate. Planned set count can create empty table rows; no planned reps or load becomes actual. A zero-target exercise starts one empty actual row. Actual rows support differing reps/weights, kg/lb display conversion over canonical kg, add/remove and Done validation/reconfirmation. Custom/catalog replacements reset only that exercise's actuals; skip/restore/remove/add affect today only. Original plans remain unchanged.
+- Local in-memory draft only, clearly labelled; no workout save/finish claims, storage writes or hosted workout calls. Refresh, route changes or account changes clear it. Opening/cancelling the saved routine editor hides/preserves it. Change session offers explicit discard for modified drafts. No actual results are persisted yet.
+- **No new SQL file is needed for this frontend-only step.** Future hosted saving needs a new forward migration to support free-text performed exercises and unknown loading conventions, an explicit strategy for unfinished sets (installed reps NOT NULL), atomic owner-checked/retry-safe saves and real persisted routine-day resolution/version checks. Do not modify 001–007 or enable hosted persistence without review/approval. Full rationale is in `docs/TODAYS_WORKOUT.md`.
+- `npm run check`: **392 tests / 19 files passed**, TypeScript passed, production build passed. 23 new model/UI/integration regressions cover selection, names/order, independent snapshots and zero actual defaults, one-open cards, actual set operations/validation/conversion, replacement/custom additions, skip/restore/removal/cancel, source immutability, zero routine writes, routine-editor draft preservation, account clearing and Discover separation. Existing migration/RLS/auth/routine suites passed too. `git diff --check` passed.
+- Browser viewport/visual acceptance was not run. Manual desktop/mobile/zoom/touch/numeric-entry/focus inspection remains. Hosted workout persistence, resume, history retrieval and custom performed-exercise RLS/concurrency are deferred and unverified. Stage 3 authenticated live acceptance remains pending; do not mark it complete because this local feature exists.
+
+Stop after this local step. Do not run hosted SQL/data modifications or expand Stage 4 automatically. SPEC.md §21 is controlling; historical unstarted/unauthorized Stage 4 statements below apply to earlier checkpoints. No live accounts, credentials or production records were accessed during this step.
 
 ---
 
