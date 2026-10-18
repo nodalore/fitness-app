@@ -34,3 +34,16 @@ test('zero weight and unset weight are distinct; bodyweight sets do not require 
   expect(actualSetError({ ...emptyActualSet('kg'), reps: 8, loadKg: 0 })).toBeNull()
   expect(actualSetError({ ...emptyActualSet('kg'), reps: 8 })).toBeNull()
 })
+
+test('finishing requires applicable weight but explicit bodyweight permits no external load', async()=>{
+ const {finishError}=await import('./workoutDraft')
+ const d=createWorkout(routine,0,testCatalog)
+ d.exercises[0].sets=[{...emptyActualSet('kg'),reps:8}]
+ expect(finishError(d)).toMatch(/Enter weight/)
+ d.exercises[0].loadingMode='bodyweight'
+ expect(finishError(d)).toBeNull()
+ d.exercises[0].loadingMode='per_implement'
+ expect(finishError(d)).toMatch(/Enter weight/)
+ d.exercises[0].sets[0].loadKg=0
+ expect(finishError(d)).toBeNull()
+})

@@ -37,6 +37,7 @@ export function finishError(draft: WorkoutDraft): string | null {
   if (!exercises.some(item => item.sets.length)) return 'Log at least one set before finishing.'
   for (const exercise of exercises) for (const set of exercise.sets) {
     if (set.reps === null) return `Enter reps for ${exercise.name}, or remove the incomplete set.`
+    if (exercise.loadingMode !== 'bodyweight' && set.loadKg === null) return exercise.exerciseId ? `Enter weight for ${exercise.name}.` : `Enter weight for ${exercise.name}, or choose bodyweight if no external load was used.`
     const error = actualSetError(set)
     if (error) return error
   }

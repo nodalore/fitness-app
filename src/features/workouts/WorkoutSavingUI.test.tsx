@@ -71,3 +71,16 @@ test('lost server response survives refresh and retries identical request before
  expect(vi.mocked(state.repo.save).mock.calls[1]).toEqual(first)
  expect(state.records.size).toBe(1)
 })
+
+test('custom bodyweight is an explicit choice; missing weighted load cannot finish or masquerade as valid history',async()=>{
+ const state=backend(),user=userEvent.setup();render(<TodaysWorkout {...state.props}/>);await begin(user)
+ await user.clear(screen.getByLabelText('Set 1 weight'));await screen.findByText('Saved to Supabase')
+ await user.click(screen.getByRole('button',{name:'Finish Workout'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('Enter weight')
+ expect(screen.queryByRole('button',{name:'Confirm finish'})).not.toBeInTheDocument()
+ await user.selectOptions(screen.getByLabelText('Exercise weight entry'),'bodyweight');await screen.findByText('Saved to Supabase')
+ await user.click(screen.getByRole('button',{name:'Finish Workout'}))
+ expect(screen.getByRole('button',{name:'Confirm finish'})).toBeVisible()
+ expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+ expect(vi.mocked(state.repo.save).mock.calls.at(-1)?.[0].exercises[0]).toMatchObject({loadingMode:'bodyweight',sets:[expect.objectContaining({reps:10,loadKg:null})]})
+})

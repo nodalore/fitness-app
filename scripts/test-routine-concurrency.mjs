@@ -260,7 +260,13 @@ try {
   assert.equal((await admin.query('select routine_day_id from workout_sessions where id=$1',[workoutDocument.id])).rows[0].routine_day_id,workoutDay)
   assert.equal((await admin.query('select reps from workout_sets where id=$1',[workoutDocument.exercises[0].sets[0].id])).rows[0].reps,9)
   pass('routine versioning preserves completed actuals, draft progress and the original source day')
-  console.log('17 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
+  currentTest='direct receipt forgery cannot interfere with legitimate finish retries'
+  await begin(first)
+  await assert.rejects(first.query("insert into workout_save_receipts(user_id,request_id,session_id,payload_hash,result_revision,result_status) values($1,$2,$3,'forged',0,'draft')",[A,randomUUID(),workoutDocument.id]),error=>error.code==='42501')
+  await first.query('rollback')
+  await begin(second);assert.deepEqual(await writeWorkout(second,updatedWorkout,updatedResult.revision,finishRequest,true),finishedResult);await second.query('commit')
+  pass('authenticated receipt forgery is denied; the original finish receipt still retries correctly')
+  console.log('18 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
 } catch (error) {
   // Never output native runner configuration or generated passwords.
   console.error(`FAIL ${currentTest}${error?.code ? ` (code ${error.code})` : ''}. Hosted database was not accessed.`)

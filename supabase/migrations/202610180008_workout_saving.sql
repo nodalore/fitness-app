@@ -16,38 +16,48 @@ alter table public.session_exercises
 alter table public.workout_sets
   alter column reps drop not null,
   add column entered_load numeric check (entered_load >= 0 and entered_load <= 22046.2262185),
-  add constraint workout_actual_load_bounds check(load_kg between 0 and 10000) not valid;
+  add constraint workout_actual_load_bounds check(load_kg between 0 and 10000) not valid,
+  add constraint workout_actual_rep_bounds check(reps between 1 and 100) not valid;
 
 create table public.workout_save_receipts (
-  user_id uuid not null default auth.uid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   request_id uuid not null,
   session_id uuid not null,
   payload_hash text not null,
   result_revision bigint not null,
   result_status text not null check(result_status in ('draft','completed')),
   primary key(user_id,request_id),
-  foreign key(user_id,session_id) references public.workout_sessions(user_id,id) on delete cascade
+  foreign key(user_id,session_id) references public.workout_sessions(user_id,id) on delete no action
 );
 create index workout_receipts_session on public.workout_save_receipts(user_id,session_id);
 create index workout_drafts_owner on public.workout_sessions(user_id,started_at desc) where status='draft';
 alter table public.workout_save_receipts enable row level security;
 alter table public.workout_save_receipts force row level security;
 revoke all on public.workout_save_receipts from public,anon,authenticated;
-grant select,insert on public.workout_save_receipts to authenticated;
+-- Only the validated SECURITY DEFINER save RPC writes receipts. Never trust
+-- client-set GUCs/flags to distinguish an RPC from direct authenticated SQL.
+grant select on public.workout_save_receipts to authenticated;
 create policy workout_receipts_read on public.workout_save_receipts for select to authenticated using(auth.uid()=user_id);
-create policy workout_receipts_insert on public.workout_save_receipts for insert to authenticated with check(auth.uid()=user_id);
 
 -- All child writes lock their workout first. This serializes finishing against
 -- direct table edits too, and advances the revision used by autosave clients.
 create function public.fitness_guard_workout_child() returns trigger
 language plpgsql security invoker set search_path='' as $$
-declare parent_id uuid; parent_state text; owner_id uuid; actual_load numeric;
+declare parent_id uuid; parent_state text; owner_id uuid; actual_load numeric; exercise_mode text; exercise_skipped boolean; exercise_removed boolean;
 begin
   owner_id := case when tg_op='DELETE' then old.user_id else new.user_id end;
   if tg_op='UPDATE' and (new.user_id is distinct from old.user_id or
     (tg_table_name='session_exercises' and to_jsonb(new)->>'session_id' is distinct from to_jsonb(old)->>'session_id') or
     (tg_table_name='workout_sets' and to_jsonb(new)->>'session_exercise_id' is distinct from to_jsonb(old)->>'session_exercise_id')) then
     raise exception 'Workout parent cannot change' using errcode='23514';
+  end if;
+  if tg_table_name='session_exercises' and tg_op<>'DELETE' then
+    if new.exercise_id is not null then
+      select loading_mode into exercise_mode from public.exercises where id=new.exercise_id;
+      if not found or new.loading_mode_snapshot is distinct from exercise_mode then
+        raise exception 'Exercise loading convention must match the library' using errcode='23514';
+      end if;
+    end if;
   end if;
   if tg_table_name='workout_sets' and tg_op<>'DELETE' then
    if new.entered_load is not null then
@@ -68,6 +78,19 @@ begin
     raise exception 'Workout unavailable' using errcode='42501';
   end if;
   if parent_state='completed' then raise exception 'Completed workouts are read-only' using errcode='55000'; end if;
+  if tg_table_name='workout_sets' and tg_op<>'DELETE' then
+    -- Re-read after the parent lock: a competing exercise update may have
+    -- changed the load convention or skip status while this writer waited.
+    select loading_mode_snapshot,skipped,removed into exercise_mode,exercise_skipped,exercise_removed
+      from public.session_exercises where id=new.session_exercise_id and user_id=owner_id and session_id=parent_id;
+    if not found then raise exception 'Workout exercise unavailable' using errcode='42501'; end if;
+    new.completed := new.reps is not null and new.reps between 1 and 100
+      and (exercise_mode='bodyweight' or new.load_kg is not null)
+      and not exercise_skipped and not exercise_removed;
+    -- Unknown/custom loading conventions require weight unless the user
+    -- explicitly identifies the movement as bodyweight/no external load.
+    new.completed := coalesce(new.completed,false);
+  end if;
   update public.workout_sessions set revision=revision+1 where user_id=owner_id and id=parent_id;
   if tg_op='DELETE' then return old; end if;
   return new;
@@ -75,6 +98,19 @@ end; $$;
 revoke all on function public.fitness_guard_workout_child() from public,anon,authenticated;
 create trigger workout_exercise_guard before insert or update or delete on public.session_exercises for each row execute function public.fitness_guard_workout_child();
 create trigger workout_set_guard before insert or update or delete on public.workout_sets for each row execute function public.fitness_guard_workout_child();
+
+-- Changing an exercise's loading/skip metadata also recomputes its set flags.
+-- The set guard remains authoritative even when clients write completed=true.
+create function public.fitness_refresh_workout_sets() returns trigger
+language plpgsql security invoker set search_path='' as $$
+begin
+  update public.workout_sets set completed=completed where user_id=new.user_id and session_exercise_id=new.id;
+  return new;
+end; $$;
+revoke all on function public.fitness_refresh_workout_sets() from public,anon,authenticated;
+create trigger workout_refresh_sets after update of loading_mode_snapshot,skipped,removed on public.session_exercises
+for each row when (old.loading_mode_snapshot is distinct from new.loading_mode_snapshot or old.skipped is distinct from new.skipped or old.removed is distinct from new.removed)
+execute function public.fitness_refresh_workout_sets();
 
 create function public.fitness_guard_workout() returns trigger
 language plpgsql security invoker set search_path='' as $$
@@ -92,12 +128,18 @@ begin
     new.updated_at := greatest(clock_timestamp(),old.updated_at+interval '1 microsecond');
   end if;
   if new.status='completed' then
+    if exists(select 1 from public.session_exercises e left join public.exercises c on c.id=e.exercise_id
+      where e.user_id=new.user_id and e.session_id=new.id and not e.skipped and not e.removed
+        and e.exercise_id is not null and e.loading_mode_snapshot is distinct from c.loading_mode) then
+      raise exception 'Exercise loading convention must match the library' using errcode='23514';
+    end if;
     if exists(select 1 from public.session_exercises e join public.workout_sets s on s.session_exercise_id=e.id
-      where e.user_id=new.user_id and e.session_id=new.id and not e.skipped and not e.removed and s.reps is null) then
-      raise exception 'Enter reps or remove incomplete sets before finishing' using errcode='22023';
+      where e.user_id=new.user_id and e.session_id=new.id and not e.skipped and not e.removed and (s.reps is null or s.reps not between 1 and 100 or not s.completed or (s.load_kg is not null and s.load_kg not between 0 and 10000)
+        or (e.loading_mode_snapshot is distinct from 'bodyweight' and s.load_kg is null))) then
+      raise exception 'Enter reps and applicable weight or remove incomplete sets before finishing' using errcode='22023';
     end if;
     if not exists(select 1 from public.session_exercises e join public.workout_sets s on s.session_exercise_id=e.id
-      where e.user_id=new.user_id and e.session_id=new.id and not e.skipped and not e.removed and s.reps is not null) then
+      where e.user_id=new.user_id and e.session_id=new.id and not e.skipped and not e.removed and s.completed and s.reps is not null) then
       raise exception 'Log at least one performed set before finishing' using errcode='22023';
     end if;
   end if;
@@ -106,9 +148,15 @@ end; $$;
 revoke all on function public.fitness_guard_workout() from public,anon,authenticated;
 create trigger workout_session_guard before insert or update or delete on public.workout_sessions for each row execute function public.fitness_guard_workout();
 
+-- Narrow privileged boundary: direct authenticated receipt writes are denied.
+-- Owner ALWAYS comes from auth.uid(); every owned lookup/delete is scoped to it,
+-- expected identity is checked, and colliding IDs fail (no cross-owner UPSERT).
+-- EXECUTE is granted only to authenticated, never anon/PUBLIC. No dynamic SQL.
+-- Keep this function owned by the trusted migration administrator.
 create function public.fitness_save_workout(
  p_document jsonb, p_expected_revision bigint, p_request_id uuid, p_expected_user_id uuid, p_finish boolean default false
-) returns jsonb language plpgsql security invoker set search_path='' as $$
+
+) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
  owner_id uuid := auth.uid(); sid uuid; existing public.workout_sessions%rowtype;
  prior public.workout_save_receipts%rowtype; source_routine public.routines%rowtype;

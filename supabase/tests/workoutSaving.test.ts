@@ -121,3 +121,149 @@ test('a stale account-bound request cannot create an independent workout after s
  await expect(as(B,'select fitness_save_workout($1::jsonb,null,$2,$3,false)',[JSON.stringify(d),crypto.randomUUID(),A])).rejects.toThrow(/correct account/)
  expect((await db.query('select * from workout_sessions where id=$1',[d.id])).rows).toHaveLength(0)
 })
+
+// Focused pre-install security regressions: exercise the real authenticated
+// table grants, not only the application's RPC path.
+test('authenticated clients cannot forge a receipt for a payload that was never saved',async()=>{
+ const d=doc(),saved=await save(d),request=crypto.randomUUID(),forged=structuredClone(d)
+ forged.exercises[0].sets[0].reps=77
+ await expect(as(A,`insert into workout_save_receipts(user_id,request_id,session_id,payload_hash,result_revision,result_status)
+   values($1,$2,$3,encode(sha256(convert_to(jsonb_build_object('document',$4::jsonb,'revision',$5::bigint,'finish',false)::text,'UTF8')),'hex'),$5,'draft')`,[A,request,d.id,JSON.stringify(forged),saved.revision])).rejects.toThrow(/permission denied/)
+ // The denied token cannot poison the legitimate save/retry either.
+ const actual=await save(forged,saved.revision,request)
+ expect(await save(forged,saved.revision,request)).toEqual(actual)
+ expect((await as(A,'select reps from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].reps).toBe(77)
+})
+test('incomplete draft rows cannot be marked as valid performed sets by direct authenticated writes',async()=>{
+ const d=doc();d.exercises[0].sets[0].reps=null as unknown as number;await save(d)
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ await as(A,'update workout_sets set completed=true where id=$1',[d.exercises[0].sets[0].id])
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ expect(await as(A,`select s.id from workout_sessions w join session_exercises e on e.session_id=w.id join workout_sets s on s.session_exercise_id=e.id
+  where w.id=$1 and w.status='completed' and not e.skipped and not e.removed and s.completed`,[d.id])).toEqual([])
+})
+test('weighted sets without actual weight cannot finish, even through a direct session status update',async()=>{
+ const d=doc();d.exercises[0].exerciseId='20000000-0000-4000-8000-000000000004' as unknown as null;d.exercises[0].loadingMode='external' as unknown as null
+ d.exercises[0].sets[0].weight=null as unknown as number
+ const saved=await save(d)
+ await expect(save(d,saved.revision,crypto.randomUUID(),true)).rejects.toThrow(/weight|incomplete/i)
+ await expect(as(A,"update workout_sessions set status='completed',completed_at=greatest(clock_timestamp(),started_at) where id=$1",[d.id])).rejects.toThrow(/weight|incomplete/i)
+})
+
+test('receipt grants are read-only, cannot reserve retry tokens, and survive attempted parent deletion',async()=>{
+ const d=doc(),request=crypto.randomUUID(),saved=await save(d,null,request)
+ expect((await as(A,"select has_table_privilege('authenticated','public.workout_save_receipts','INSERT') as insert,has_table_privilege('authenticated','public.workout_save_receipts','UPDATE') as update,has_table_privilege('authenticated','public.workout_save_receipts','DELETE') as delete"))[0]).toEqual({insert:false,update:false,delete:false})
+ const before=await as(A,'select * from workout_save_receipts where user_id=$1 and request_id=$2',[A,request])
+ await expect(as(A,"update workout_save_receipts set payload_hash='forged' where request_id=$1",[request])).rejects.toThrow(/permission denied/)
+ await expect(as(A,'delete from workout_save_receipts where request_id=$1',[request])).rejects.toThrow(/permission denied/)
+ await expect(as(A,'delete from workout_sessions where id=$1',[d.id])).rejects.toThrow(/foreign key/)
+ expect(await as(A,'select * from workout_save_receipts where user_id=$1 and request_id=$2',[A,request])).toEqual(before)
+ expect(await save(d,null,request)).toEqual(saved)
+ expect(await as(B,'select * from workout_save_receipts where session_id=$1',[d.id])).toEqual([])
+})
+test('trusted receipt writer retains JWT ownership and cannot overwrite foreign session/child IDs',async()=>{
+ const d=doc(),saved=await save(d)
+ const foreign={...doc(),routineId:null,routineDayId:null,routineVersion:null,id:d.id}
+ await expect(save(foreign as unknown as ReturnType<typeof doc>,null,crypto.randomUUID(),false,B)).rejects.toThrow()
+ const collision={...doc(),routineId:null,routineDayId:null,routineVersion:null}
+ collision.exercises[0].id=d.exercises[0].id
+ await expect(save(collision as unknown as ReturnType<typeof doc>,null,crypto.randomUUID(),false,B)).rejects.toThrow()
+ const record=(await as(A,'select revision,status from workout_sessions where id=$1',[d.id]))[0]
+ expect(record).toEqual({revision:saved.revision,status:'draft'})
+ expect(await as(B,'select * from workout_sessions')).toEqual([])
+ const grants=(await db.query<{prosecdef:boolean;proconfig:string[];anon:boolean}>("select p.prosecdef,p.proconfig,has_function_privilege('anon',p.oid,'EXECUTE') as anon from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='fitness_save_workout'")).rows[0]
+ expect(grants.prosecdef).toBe(true);expect(grants.proconfig).toContain('search_path=""');expect(grants.anon).toBe(false)
+})
+test('set validity derives from actual inputs and skip/load changes, without a Done flag users can forge',async()=>{
+ const d=doc();d.exercises[0].sets[0].weight=null as unknown as number
+ let result=await save(d)
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ await as(A,"update session_exercises set loading_mode_snapshot='bodyweight' where id=$1",[d.exercises[0].id])
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(true)
+ await as(A,'update session_exercises set skipped=true where id=$1',[d.exercises[0].id])
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ await as(A,'update session_exercises set skipped=false,removed=true where id=$1',[d.exercises[0].id])
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ await as(A,'update session_exercises set removed=false where id=$1',[d.exercises[0].id])
+ await as(A,"update session_exercises set loading_mode_snapshot='per_implement' where id=$1",[d.exercises[0].id])
+ expect((await as(A,'select completed from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0].completed).toBe(false)
+ // Explicit zero load is valid and is never fabricated from NULL.
+ await as(A,'update workout_sets set entered_load=0 where id=$1',[d.exercises[0].sets[0].id])
+ expect((await as(A,'select completed,entered_load from workout_sets where id=$1',[d.exercises[0].sets[0].id]))[0]).toEqual({completed:true,entered_load:'0'})
+ expect(result.status).toBe('draft')
+})
+test('known weighted catalog exercises cannot masquerade as bodyweight to omit load',async()=>{
+ const d=doc();d.exercises[0].exerciseId='20000000-0000-4000-8000-000000000003' as unknown as null;d.exercises[0].loadingMode='per_implement' as unknown as null
+ const saved=await save(d)
+ await expect(as(A,"update session_exercises set loading_mode_snapshot='bodyweight' where id=$1",[d.exercises[0].id])).rejects.toThrow(/match the library/)
+ d.exercises[0].loadingMode='bodyweight' as unknown as null
+ await expect(save(d,saved.revision)).rejects.toThrow(/match the library/)
+})
+test('only finished sessions with included valid actual sets qualify for completed-history results',async()=>{
+ const d=doc();d.exercises[0].loadingMode='bodyweight' as unknown as null;d.exercises[0].sets[0].weight=null as unknown as number
+ const skipped={...structuredClone(d.exercises[0]),id:crypto.randomUUID(),name:'Skipped movement',skipped:true,sets:[{...d.exercises[0].sets[0],id:crypto.randomUUID(),reps:null as unknown as number}]}
+ const removed={...structuredClone(skipped),id:crypto.randomUUID(),name:'Removed movement',skipped:false,removed:true,sets:[]}
+ d.exercises.push(skipped,removed)
+ const result=await save(d)
+ const history=()=>as(A,`select e.exercise_name_snapshot,s.id,s.reps,s.entered_load,s.entered_unit from workout_sessions w join session_exercises e on e.session_id=w.id join workout_sets s on s.session_exercise_id=e.id
+  where w.id=$1 and w.status='completed' and not e.skipped and not e.removed and s.completed order by e.position,s.set_number`,[d.id])
+ expect(await history()).toEqual([])
+ await save(d,result.revision,crypto.randomUUID(),true)
+ const actual=await history();expect(actual).toHaveLength(2)
+ expect(actual[0]).toMatchObject({exercise_name_snapshot:'My hip thrust',reps:10,entered_load:null,entered_unit:'lb'})
+ expect(actual[1]).toMatchObject({reps:8,entered_load:'60',entered_unit:'kg'})
+})
+
+test('finished actuals resist direct name/set/date/source edits, routine versioning, archive and routine deletion',async()=>{
+ const plan={name:'Original routine',goal:'strength',assumptions:{},days:[{name:'Original session',weekday:null,exercises:[{exercise_id:'20000000-0000-4000-8000-000000000004',target_sets:2,rep_min:8,rep_max:12,rest_seconds:120,notes:'Original targets'}]}]}
+ const routineId=crypto.randomUUID()
+ await as(A,'select fitness_save_routine($1,$2::jsonb,$3,null)',[routineId,JSON.stringify(plan),crypto.randomUUID()])
+ const source=(await as(A,'select r.updated_at::text as version,d.id as day from routines r join routine_days d on d.routine_id=r.id where r.id=$1',[routineId]))[0]
+ const d={...doc(),routineId,routineDayId:source.day as string,routineVersion:source.version as string}
+ const saved=await save(d);await save(d,saved.revision,crypto.randomUUID(),true)
+ const snapshots=async()=>({
+  session:await as(A,'select * from workout_sessions where id=$1',[d.id]),
+  exercises:await as(A,'select * from session_exercises where session_id=$1 order by id',[d.id]),
+  sets:await as(A,'select * from workout_sets where session_exercise_id=$1 order by id',[d.exercises[0].id]),
+ })
+ const before=await snapshots()
+ const attacks:[string,unknown[]][]=[
+  ["update workout_sessions set routine_name_snapshot='Changed' where id=$1",[d.id]],
+  ["update workout_sessions set routine_id=null,routine_day_id=null where id=$1",[d.id]],
+  ["update workout_sessions set completed_at=completed_at+interval '1 day' where id=$1",[d.id]],
+  ["update session_exercises set exercise_name_snapshot='Changed' where id=$1",[d.exercises[0].id]],
+  ["delete from session_exercises where id=$1",[d.exercises[0].id]],
+  ["insert into session_exercises(user_id,session_id,exercise_name_snapshot,loading_mode_snapshot,position) values($1,$2,'Injected','bodyweight',99)",[A,d.id]],
+  ["update workout_sets set entered_load=999,reps=99,entered_unit='kg' where id=$1",[d.exercises[0].sets[0].id]],
+  ["update workout_sets set completed=false where id=$1",[d.exercises[0].sets[0].id]],
+  ["delete from workout_sets where id=$1",[d.exercises[0].sets[0].id]],
+  ["insert into workout_sets(user_id,session_exercise_id,set_number,reps,load_kg) values($1,$2,99,5,10)",[A,d.exercises[0].id]],
+  ["delete from workout_sessions where id=$1",[d.id]],
+ ]
+ for(const [sql,args]of attacks)await expect(as(A,sql,args)).rejects.toThrow(/read-only/)
+ expect(await snapshots()).toEqual(before)
+ const collision={...doc(),routineId:null,routineDayId:null,routineVersion:null}
+ collision.exercises[0].id=d.exercises[0].id
+ await expect(save(collision as unknown as ReturnType<typeof doc>)).rejects.toThrow(/duplicate key/)
+ expect(await as(A,'select id from workout_sessions where id=$1',[collision.id])).toEqual([])
+ expect(await snapshots()).toEqual(before)
+ const changed={...plan,name:'Edited routine',days:[{...plan.days[0],name:'Edited session'}]}
+ const nextId=(await as(A,'select fitness_save_routine($1,$2::jsonb,$3,$4::timestamptz) as id',[routineId,JSON.stringify(changed),crypto.randomUUID(),source.version]))[0].id as string
+ expect(nextId).not.toBe(routineId)
+ expect(await snapshots()).toEqual(before)
+ await as(A,'update routines set archived_at=clock_timestamp() where id=$1',[nextId])
+ await expect(as(A,'delete from routines where id=$1',[routineId])).rejects.toThrow(/foreign key/)
+ await expect(as(A,'delete from routine_days where id=$1',[source.day])).rejects.toThrow(/foreign key/)
+ await as(A,'delete from routines where id=$1',[nextId])
+ expect(await snapshots()).toEqual(before)
+ expect((await snapshots()).sets.map(s=>({reps:s.reps,weight:s.entered_load,unit:s.entered_unit}))).toEqual(expect.arrayContaining([{reps:10,weight:'180',unit:'lb'},{reps:8,weight:'60',unit:'kg'}]))
+})
+test('receipt retention still permits deliberate privileged account deletion and its owned cascades',async()=>{
+ const C='c0000000-0000-4000-8000-000000000001'
+ await db.query('insert into auth.users values($1)',[C])
+ const d={...doc(),routineId:null,routineDayId:null,routineVersion:null}
+ const first=await save(d as unknown as ReturnType<typeof doc>,null,crypto.randomUUID(),false,C)
+ await save(d as unknown as ReturnType<typeof doc>,first.revision,crypto.randomUUID(),true,C)
+ await db.query('delete from auth.users where id=$1',[C])
+ for(const table of ['workout_sessions','session_exercises','workout_sets','workout_save_receipts'])expect((await db.query(`select * from ${table} where user_id=$1`,[C])).rows).toEqual([])
+})
