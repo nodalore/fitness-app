@@ -112,3 +112,20 @@ test('saved exercise notes are collapsed and remain available without changing p
   expect(screen.getByText(note)).toBeVisible(); expect(screen.getByText('8–12 reps')).toBeVisible()
   await userEvent.click(screen.getByText('Exercise notes')); expect(screen.getByText(note)).not.toBeVisible()
 })
+
+ test.each([true, false])('empty planned targets have no badge or empty summary (recommendation: %s)', async showDescriptions => {
+  const initial = { ...structuredClone(testDocument), days: [{ ...testDocument.days[0], exercises: [blankExercise('', testCatalog[0].id)] }] }
+  const before = structuredClone(initial)
+  const { container } = render(<RoutinePlan document={initial} catalog={testCatalog} showDescriptions={showDescriptions} expandedSessions />)
+  if (showDescriptions) {
+    await userEvent.click(screen.getByRole('button', { name: /Full body/ }))
+    expect(screen.getByText(/^Equipment:/)).toBeVisible()
+    await userEvent.click(screen.getByText(testCatalog[0].name))
+    expect(screen.getByText('Bend at the hips and knees to lower into a squat, then stand.')).toBeVisible()
+  } else expect(screen.getByRole('heading', { name: testCatalog[0].name })).toBeVisible()
+  expect(screen.queryByText('Targets unset')).not.toBeInTheDocument()
+  expect(container.querySelector('.prescription-summary')).toBeNull()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  expect(initial).toEqual(before)
+  expect(initial.days[0].exercises[0].planned_sets).toEqual([])
+ })

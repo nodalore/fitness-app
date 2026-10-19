@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router'
 import { useAuth } from './AuthProvider'
+import { TrainingImage } from '../../components/ui'
 
-function AuthFrame({ title, children }: { title: string; children: ReactNode }) {
+function AuthFrame({ title, children, gym = false }: { title: string; children: ReactNode; gym?: boolean }) {
   const { client } = useAuth()
-  return <section className="account-layout"><div className="account-intro"><p className="eyebrow">FITNESS APP / TRAINING JOURNAL</p><h1>{title}</h1><p>Your account is the home for your training record. Start with a profile. Build your routine when you’re ready.</p><span className="journal-stamp">PERSONAL RECORD · VOL. 01</span></div><div className="account-panel">{client ? children : <p role="alert">Account access is unavailable right now. Please try again later.</p>}</div></section>
+  return <section className={`account-layout ${gym ? 'login-gym' : ''}`}>{gym && <TrainingImage eager />}<div className="account-intro"><p className="eyebrow">{gym ? 'YOUR TRAINING / YOUR SPACE' : 'FITNESS APP / TRAINING JOURNAL'}</p><h1>{title}</h1><p>{gym ? 'Your next session starts here.' : 'Your account is the home for your training record. Start with a profile. Build your routine when you’re ready.'}</p>{!gym && <span className="journal-stamp">PERSONAL RECORD · VOL. 01</span>}</div><div className="account-panel">{client ? children : <p role="alert">Account access is unavailable right now. Please try again later.</p>}</div></section>
 }
 
 export function LoginPage() {
@@ -25,7 +26,7 @@ export function LoginPage() {
     } catch { setMessage('Unable to sign in. Check your connection and try again.') }
     finally { setBusy(false) }
   }
-  return <AuthFrame title="Welcome back."><h2>Sign in</h2><form onSubmit={submit}><EmailField /><PasswordField /><button disabled={busy || loading} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button><p role="alert">{message}</p></form><Link to="/auth/forgot-password">Forgot your password?</Link><p>New here? <Link to="/register">Create an account</Link></p></AuthFrame>
+  return <AuthFrame title="Welcome back." gym><h2>Sign in</h2><form onSubmit={submit}><EmailField /><PasswordField /><button disabled={busy || loading} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button><p role="alert">{message}</p></form><Link to="/auth/forgot-password">Forgot your password?</Link><p>New here? <Link to="/register">Create an account</Link></p></AuthFrame>
 }
 
 export function RegisterPage() {

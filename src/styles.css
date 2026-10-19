@@ -669,3 +669,30 @@ details[open] > summary::after { transform: rotate(180deg); }
 }
 
 .exercise-outline button[aria-expanded=true] { color: var(--accent); background: #dcc9ad0a; box-shadow: inset 2px 0 var(--accent); padding-left: 12px; border-radius: 4px; }
+
+/* Sign-in only: smoked mirror glass over the existing licensed gym photograph. */
+.login-gym { position: relative; isolation: isolate; overflow: hidden; border: 1px solid #dcc9ad30; border-radius: var(--radius); margin-top: 28px; min-height: 610px; padding: clamp(28px, 5vw, 72px); gap: 48px; align-items: center; }
+.login-gym > .training-image { position: absolute; inset: 0; z-index: -3; object-position: 55% center; }
+.login-gym::before { content: ''; position: absolute; inset: 0; z-index: -2; background: linear-gradient(90deg, #111211d9, #11121165 60%, #11121199), linear-gradient(0deg, #111211a6, transparent 65%); }
+.login-gym::after { content: ''; pointer-events: none; position: absolute; inset: 0; z-index: -1; background: linear-gradient(115deg, transparent 42%, #dcc9ad12 42.1%, transparent 42.3%, transparent 70%, #dcc9ad0a 70.1%, transparent 70.4%); }
+.login-gym .account-intro { min-width: 0; }
+.login-gym .account-intro h1 { font-size: clamp(42px, 5vw, 70px); max-width: 8ch; line-height: 1.05; text-wrap: balance; }
+.login-gym .account-intro p { color: #e0d8ca; }
+.login-gym .eyebrow { font-size: 10px; letter-spacing: 2px; }
+.login-gym .account-panel { min-width: 0; width: 100%; max-width: 460px; justify-self: end; padding: clamp(24px, 3vw, 40px); background: linear-gradient(135deg, #f5f0e815, #202220cf 45%, #111211df); border: 1px solid #dcc9ad55; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: inset 0 1px 0 #fff2, 0 20px 60px #0005; }
+.login-gym .account-panel h2 { margin-bottom: 26px; }
+.login-gym .account-panel input { background: #141614c9; border-color: #dcc9ad45; }
+.login-gym .account-panel form > button { width: 100%; margin-top: 6px; }
+.login-gym .account-panel > p:last-child { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .login-gym { gap: 28px; padding: 32px; }
+}
+@media (max-width: 760px) {
+  .login-gym { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 24px; margin-top: 24px; min-height: 0; }
+  .login-gym .account-intro { padding: 8px 0 0; }
+  .login-gym .account-intro h1 { max-width: none; font-size: clamp(36px, 8vw, 52px); margin-bottom: 12px; }
+  .login-gym .account-intro p:last-child { margin-bottom: 0; }
+  .login-gym .account-panel { max-width: none; padding: 24px; }
+  .login-gym > .training-image { object-position: 60% center; }
+}
+@media (max-width: 360px) { .login-gym { padding: 16px; } .login-gym .account-panel { padding: 20px 16px; } }
