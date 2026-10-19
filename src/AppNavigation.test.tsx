@@ -43,3 +43,22 @@ test('main scrolling resets on navigation and browser history, and hashes reveal
   expect(await screen.findByText('Saved routines')).toHaveFocus()
   expect(screen.queryByText('STAY CONSISTENT')).not.toBeInTheDocument()
 })
+
+test('Workout History follows My routines and has its own active route and title', async () => {
+  render(<MemoryRouter initialEntries={['/dashboard']}><App /></MemoryRouter>)
+  const links = Array.from(screen.getByRole('navigation', { name: 'Your training' }).querySelectorAll('a'))
+  expect(links.map(link => link.textContent)).toEqual(['Dashboard', 'Discover', 'My routines', 'Workout History', 'Profile'])
+  await userEvent.click(screen.getByRole('link', { name: 'Workout History' }))
+  expect(await screen.findByRole('heading', { name: 'Workout History' })).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Workout History' })).toHaveAttribute('aria-current','page')
+  expect(document.title).toBe('Workout History | Fitness App')
+})
+
+ test.each([true, false])('the brand returns to home with signed-in state %s', async signedIn => {
+  mocks.session = signedIn ? { user: { id: 'user-a' } } : null
+  render(<MemoryRouter initialEntries={['/about']}><App /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Fitness App home' })).toHaveAttribute('href', '/')
+  await userEvent.click(screen.getByRole('link', { name: 'Fitness App home' }))
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Make your training easier.')
+  expect(document.title).toBe('Home | Fitness App')
+ })

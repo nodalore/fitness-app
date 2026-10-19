@@ -1,3 +1,5 @@
+> Superseding status: user reports migration 008 hosted saving is successful. The separate read-only History milestone is implemented locally; see SPEC.md §23 and NOTES.md. The unapplied/History-deferred language below records the earlier pre-install review. The reviewed migration file remains unchanged.
+
 # Workout saving/resuming/finishing — local review
 
 2026-10-18. User approved implementing the saving milestone and local tests. **Migration 008 is a local draft and has NOT been executed against hosted Supabase.** No hosted queries, account access or writes occurred in this implementation. Installed 001–007 and the `stage-3-stable` branch remain unchanged. Workout History UI is deferred until saving/resuming acceptance.

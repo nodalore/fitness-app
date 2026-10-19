@@ -8,7 +8,7 @@ type Workspace = Awaited<ReturnType<typeof loadWorkspace>>
 export function DashboardPage() {
   const { client, session, loading, error } = useAuth()
   if (loading) return <p role="status">Restoring your session…</p>
-  if (!client) return <section className="reading"><h1>Your training space</h1><p>Configure Supabase to access your dashboard.</p><Link to="/">Back to home</Link></section>
+  if (!client) return <section className="reading"><h1>Your training space</h1><p>Your training space is unavailable right now. Please try again later.</p><Link to="/">Back to home</Link></section>
   if (error) return <p role="alert">{error}</p>
   if (!session) return <Navigate to="/login" replace />
   return <Dashboard key={session.user.id} userId={session.user.id} />
@@ -33,8 +33,8 @@ function Dashboard({ userId }: { userId: string }) {
     <PageHeading eyebrow="DASHBOARD" title={<>Build <em>strength.</em></>} description={profile?.display_name ? `Welcome back, ${profile.display_name}.` : 'Set your goal. Build your plan.'} action={<Link className="button secondary-button" to="/profile"><Icon name="user" /> Profile</Link>} />
     <div className="dashboard-hero"><TrainingImage eager /><div className="photo-shade" /><div className="dashboard-hero-copy"><Badge>YOUR TRAINING</Badge><h2>Get <em>focused.</em></h2><p>Pick a plan. Make it yours.</p><Link className="button" to={profile ? '/routines' : '/profile'}>{profile ? 'Find a plan' : 'Set up profile'}<Icon name="arrow" /></Link></div><span className="photo-caption">STAY CONSISTENT</span></div>
     <div className="stats-grid"><StatCard label="Goal" value={profile ? profile.goal.replaceAll('_', ' ') : 'Choose a goal'} detail={profile ? profile.experience : 'Set up your profile'} /><StatCard label="Active plans" value={String(active.length).padStart(2, '0')} detail="Your saved routines" /><StatCard label="Review" value={profile ? `${profile.timeline_weeks} weeks` : 'Not set'} detail="No guaranteed results" /></div>
-    <div className="dashboard-bottom"><section><div className="section-heading"><div><p className="eyebrow">YOUR PLANS</p><h2>My routines</h2></div><Link to="/routines#saved">View all <span aria-hidden="true">↗</span></Link></div>
-      {active.length ? <div className="dashboard-plans">{active.slice(0, 3).map(routine => <Link className="dashboard-plan" key={routine.id} to="/routines#saved"><span className="plan-icon"><Icon name="strength" /></span><span><strong>{routine.document.name}</strong><small>{routine.document.days.length} {routine.document.days.length === 1 ? 'workout' : 'workouts'} · {routine.document.goal.replaceAll('_', ' ')}</small></span><Icon name="arrow" /></Link>)}</div> : <Panel className="empty-state"><Icon name="layers" /><h3>Build your plan.</h3><p>No saved routines yet.</p><Link to="/routines">Find a routine →</Link></Panel>}
-    </section><Panel className="guidance-card"><span className="eyebrow">THE BASICS</span><h2>Train <em>smart.</em></h2><p>Know your plan. Control your reps.</p><Link to="/about">Training guide <span aria-hidden="true">↗</span></Link><p className="field-note">Workout logging: coming later.</p></Panel></div>
+    <div className="dashboard-bottom"><section><div className="section-heading"><div><p className="eyebrow">YOUR PLANS</p><h2>My routines</h2></div><Link to="/routines#saved">View all <Icon name="arrow" /></Link></div>
+      {active.length ? <div className="dashboard-plans">{active.slice(0, 3).map(routine => <Link className="dashboard-plan" key={routine.id} to="/routines#saved"><span className="plan-icon"><Icon name="strength" /></span><span><strong>{routine.document.name}</strong><small>{routine.document.days.length} {routine.document.days.length === 1 ? 'workout' : 'workouts'} · {routine.document.goal.replaceAll('_', ' ')}</small></span><Icon name="arrow" /></Link>)}</div> : <Panel className="empty-state"><Icon name="layers" /><h3>Build your plan.</h3><p>No saved routines yet.</p><Link to="/routines">Find a routine <Icon name="arrow" /></Link></Panel>}
+    </section></div>
   </section>
 }

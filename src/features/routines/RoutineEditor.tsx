@@ -1,3 +1,4 @@
+import { Icon } from '../../components/ui'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { ProfileDraft } from '../profile/profile'
 import { validateExercise, validateRoutine } from './routineValidation'
@@ -12,6 +13,7 @@ type EditorDay = {
   // This input buffer is not a routine exercise until Add Exercise or Save.
   composer: PerSetPrescription;
   selected: number | null;
+  composerOpen: boolean;
 }
 const LB_PER_KG = 2.20462262185
 const hasInput = (item: PerSetPrescription) => Boolean(item.exercise_id || item.custom_exercise_name || item.notes || item.planned_sets.length)
@@ -19,7 +21,7 @@ const hasInput = (item: PerSetPrescription) => Boolean(item.exercise_id || item.
 export function RoutineEditor({ initial, catalog, profile, editingExisting = false, onSave, onCancel }: Props) {
   const [document, setDocument] = useState(() => structuredClone(initial))
   const [days, setDays] = useState<EditorDay[]>(() => initial.days.map(day => ({
-    day: structuredClone(day), composer: blankExercise(), selected: day.exercises.length ? 0 : null,
+    day: structuredClone(day), composer: blankExercise(), selected: !editingExisting && day.exercises.length ? 0 : null, composerOpen: !editingExisting,
   })))
   const [dayIndex, setDayIndex] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -57,11 +59,12 @@ export function RoutineEditor({ initial, catalog, profile, editingExisting = fal
     updateCurrent({ ...current, day: { ...day, exercises }, selected: selected + offset })
   }
   function addExercise() {
+    if (selected === null && !current.composerOpen) { updateCurrent({ ...current, composerOpen: true }); return }
     const validation = validateExercise(item, catalog)
     if (validation) { setError(validation); return }
     if (selected !== null) {
       // Existing entries are edited in place in the local draft, never appended again.
-      updateCurrent({ ...current, selected: null })
+      updateCurrent({ ...current, selected: null, composerOpen: !editingExisting })
     } else {
       if (day.exercises.length >= 20) { setError('Use at most 20 exercises per day.'); return }
       updateCurrent({ ...current, day: { ...day, exercises: [...day.exercises, structuredClone(composer)] }, composer: blankExercise(), selected: null })
@@ -71,7 +74,7 @@ export function RoutineEditor({ initial, catalog, profile, editingExisting = fal
   function removeExercise() {
     if (selected === null) return
     const exercises = day.exercises.filter((_, i) => i !== selected)
-    updateCurrent({ ...current, day: { ...day, exercises }, selected: exercises.length ? Math.min(selected, exercises.length - 1) : null })
+    updateCurrent({ ...current, day: { ...day, exercises }, selected: !editingExisting && exercises.length ? Math.min(selected, exercises.length - 1) : null, composerOpen: !editingExisting })
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -92,8 +95,6 @@ export function RoutineEditor({ initial, catalog, profile, editingExisting = fal
 
   return <section className="routine-editor focused-editor" aria-labelledby="editor-title">
     <p className="eyebrow">PLAN BUILDER</p><h2 id="editor-title" ref={titleRef} tabIndex={-1}>{editingExisting ? 'Edit routine' : 'Build your routine'}</h2>
-    <p className="field-note">Planned targets only · no completed workouts</p>
-    {editingExisting && <p className="field-note">Changes update this routine. Plans linked to workout history are saved as a new version; the original stays archived.</p>}
     <form onSubmit={submit} onChange={() => setError('')}>
       <fieldset disabled={busy} className="editor-fields"><legend className="sr-only">Routine details</legend>
         <label>Routine name<input maxLength={100} value={document.name} onChange={e => setDocument({ ...document, name: e.target.value })} /></label>
@@ -104,15 +105,14 @@ export function RoutineEditor({ initial, catalog, profile, editingExisting = fal
             const next = [...days]; [next[dayIndex - 1], next[dayIndex]] = [next[dayIndex], next[dayIndex - 1]]
             setDays(next); setDayIndex(dayIndex - 1)
           }}>Move day up</button><button type="button" className="text-button" disabled={days.length === 1} onClick={() => { setDays(days.filter((_, i) => i !== dayIndex)); setDayIndex(Math.max(0, dayIndex - 1)) }}>Remove day</button></div>
-          {day.exercises.length > 0 && <ol className="exercise-outline" aria-label="Added exercises">{day.exercises.map((entry, index) => <li key={index}><button className="text-button" type="button" aria-pressed={selected === index} onClick={() => updateCurrent({ ...current, selected: index })}><span className="number">{String(index + 1).padStart(2, '0')}</span>{nameOf(entry)}</button></li>)}</ol>}
-          <div className="active-exercise" key={`${dayIndex}-${selected ?? 'composer'}`}>
+          {day.exercises.length > 0 && <ol className="exercise-outline" aria-label="Added exercises">{day.exercises.map((entry, index) => <li key={index}><button className="text-button" type="button" aria-pressed={selected === index} aria-expanded={selected === index} aria-controls="exercise-editor-panel" onClick={() => updateCurrent({ ...current, selected: selected === index ? null : index, composerOpen: false })}><span className="number">{String(index + 1).padStart(2, '0')}</span>{nameOf(entry)}</button></li>)}</ol>}
+          {(selected !== null || current.composerOpen) && <div id="exercise-editor-panel" className="active-exercise" key={`${dayIndex}-${selected ?? 'composer'}`}>
             <h3 className="exercise-form-title">Exercise {(selected ?? day.exercises.length) + 1}</h3>
             {item.planning_mode !== 'per_set' && <p className="field-note">Changing this exercise clears its saved range. Leave it unchanged to preserve the original targets.</p>}
             <label>Exercise name<input maxLength={100} value={nameOf(item)} onChange={e => {
               if (item.planning_mode === 'per_set') changeExercise({ ...item, exercise_id: null, custom_exercise_name: e.target.value })
               else changeExercise({ ...blankExercise(e.target.value), notes: item.notes })
             }} /></label>
-            <details className="catalog-picker"><summary>Choose from library</summary><label>Library exercise<select value={item.exercise_id ?? ''} onChange={e => { if (e.target.value) changeExercise({ ...blankExercise('', e.target.value), notes: item.notes }) }}><option value="">Select explicitly</option>{catalog.filter(entry => !entry.deprecated_at || entry.id === item.exercise_id).map(entry => <option key={entry.id} value={entry.id}>{entry.name}{entry.deprecated_at ? ' (retired)' : ''}</option>)}</select></label></details>
             {selectedExercise?.loading_mode === 'per_implement' && <p className="field-note">Planned weight is per dumbbell / implement.</p>}
             {selectedExercise?.slug.startsWith('band-') && <p className="field-note">Describe the band and setup in notes; leave weight unset.</p>}
             {item.planning_mode === 'per_set' ? <>
@@ -126,16 +126,16 @@ export function RoutineEditor({ initial, catalog, profile, editingExisting = fal
                 <label>Reps<input aria-label={`Set ${index + 1} reps`} type="number" min={1} max={100} step={1} placeholder="Unset" value={set.reps ?? ''} onChange={e => changeSet(index, { reps: e.target.value === '' ? null : Number(e.target.value) })} /></label>
                 <label>Planned weight<input aria-label={`Set ${index + 1} planned weight`} type="number" min={0} max={set.entered_unit === 'lb' ? 22046.2262185 : 10000} step="any" placeholder="Unset" value={set.load_kg == null ? '' : Number((set.load_kg * (set.entered_unit === 'lb' ? LB_PER_KG : 1)).toFixed(6))} onChange={e => changeSet(index, { load_kg: e.target.value === '' ? null : Number(e.target.value) / (set.entered_unit === 'lb' ? LB_PER_KG : 1) })} /></label>
                 <label className="set-unit">Unit<select aria-label={`Set ${index + 1} unit`} value={set.entered_unit} onChange={e => changeSet(index, { entered_unit: e.target.value as 'kg' | 'lb' })}><option value="kg">kg</option><option value="lb">lb</option></select></label>
-                <button type="button" className="text-button" aria-label={`Remove set ${index + 1}`} onClick={() => changeExercise({ ...item, planned_sets: item.planned_sets.filter((_, i) => i !== index) })}>×</button>
+                <button type="button" className="text-button" aria-label={`Remove set ${index + 1}`} onClick={() => changeExercise({ ...item, planned_sets: item.planned_sets.filter((_, i) => i !== index) })}><Icon name="close" /></button>
               </div>)}</div>
               <button type="button" className="secondary-button" disabled={item.planned_sets.length >= 10} onClick={() => changeExercise({ ...item, planned_sets: [...item.planned_sets, { reps: null, load_kg: null, entered_unit: unit }] })}>Add Set</button>
             </> : <div className="legacy-targets"><p>Saved range: {item.target_sets} sets · {item.rep_min}–{item.rep_max} reps · {item.rest_seconds}s rest</p><p className="field-note">Kept unchanged. Switching to per-set targets clears this range; enter your own targets.</p><button className="secondary-button" type="button" onClick={() => changeExercise({ ...blankExercise('', item.exercise_id), notes: item.notes })}>Set individual targets</button></div>}
             <details><summary>Exercise notes</summary><label>Notes<textarea maxLength={2000} value={item.notes} onChange={e => changeExercise({ ...item, notes: e.target.value })} /></label></details>
             {selected !== null && <div className="compact-actions"><button type="button" className="text-button" disabled={selected === 0} onClick={() => moveExercise(-1)}>Move exercise up</button><button type="button" className="text-button" disabled={selected === day.exercises.length - 1} onClick={() => moveExercise(1)}>Move exercise down</button><button type="button" className="text-button" onClick={removeExercise}>Remove exercise</button></div>}
-          </div>
+          </div>}
           <div className="inline-actions"><button className="secondary-button" type="button" disabled={selected === null && day.exercises.length >= 20} onClick={addExercise}>{selected === null ? 'Add Exercise' : 'Done Editing Exercise'}</button>
-            {selected !== null && hasInput(composer) && <button type="button" className="text-button" onClick={() => updateCurrent({ ...current, selected: null })}>Continue unfinished exercise</button>}
-            <button type="button" className="secondary-button" disabled={days.length >= 7} onClick={() => { setDays([...days, { day: { name: '', weekday: null, exercises: [] }, composer: blankExercise(), selected: null }]); setDayIndex(days.length); setError('') }}>Add Day</button></div>
+            {selected !== null && hasInput(composer) && <button type="button" className="text-button" onClick={() => updateCurrent({ ...current, selected: null, composerOpen: true })}>Continue unfinished exercise</button>}
+            <button type="button" className="secondary-button" disabled={days.length >= 7} onClick={() => { setDays([...days, { day: { name: '', weekday: null, exercises: [] }, composer: blankExercise(), selected: null, composerOpen: true }]); setDayIndex(days.length); setError('') }}>Add Day</button></div>
         </div>
         <div className="editor-save-bar"><button type="submit">{busy ? 'Saving routine…' : editingExisting ? 'Save Changes' : 'Save Routine'}</button><button type="button" className="secondary-button" onClick={onCancel}>Cancel</button></div>
       </fieldset><p role="alert">{error}</p>

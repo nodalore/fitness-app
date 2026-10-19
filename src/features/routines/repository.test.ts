@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { archiveRoutine, deleteRoutine, loadWorkspace, saveRoutine } from './repository'
+import { archiveRoutine, restoreRoutine, deleteRoutine, loadWorkspace, saveRoutine } from './repository'
 import { testDocument, testProfile, testCatalog } from './testFixtures'
 
 test('save calls the atomic RPC without passing a caller-controlled owner ID', async () => {
@@ -10,7 +10,7 @@ test('save calls the atomic RPC without passing a caller-controlled owner ID', a
 })
 
 test.each([
-  ['PGRST202', /reviewed migration 007/], ['40001', /changed in another session/], ['42501', /not saved/],
+  ['PGRST202', /Routine saving is unavailable/], ['40001', /changed in another session/], ['55000', /permanently deleted/], ['42501', /not saved/],
 ])('RPC error %s is actionable without exposing server details', async (code, message) => {
   const rpc = vi.fn().mockResolvedValue({ data: null, error: { code, message: 'internal-details' } })
   await expect(saveRoutine({ rpc } as unknown as SupabaseClient, 'id', testDocument, 'request', null)).rejects.toThrow(message)
@@ -28,25 +28,19 @@ test('workspace reads fresh owner-filtered records and orders nested prescriptio
   expect(result.routines[0].document.assumptions).toEqual({ origin: 'custom' })
 })
 
-test('archive filters by owner, ID, version, and active state before confirming success', async () => {
-  const single = vi.fn().mockResolvedValue({ data: { id: 'id' }, error: null })
-  const chain = { eq: vi.fn(), is: vi.fn(), select: vi.fn() }
-  chain.eq.mockReturnValue(chain); chain.is.mockReturnValue(chain); chain.select.mockReturnValue({ single })
-  const update = vi.fn().mockReturnValue(chain)
-  const client = { from: () => ({ update }) } as unknown as SupabaseClient
-  await archiveRoutine(client, 'owner-a', { id: 'id', updated_at: 'stamp', archived_at: null, document: testDocument })
-  expect(chain.eq).toHaveBeenCalledWith('user_id', 'owner-a')
-  expect(chain.eq).toHaveBeenCalledWith('id', 'id')
-  expect(chain.eq).toHaveBeenCalledWith('updated_at', 'stamp')
-  expect(chain.is).toHaveBeenCalledWith('archived_at', null)
+test.each([['archive', archiveRoutine, 'archived'], ['restore', restoreRoutine, 'active'], ['delete', deleteRoutine, 'deleted']] as const)('%s uses the atomic owner/version-checked management RPC', async (action, operation, status) => {
+  const rpc = vi.fn().mockResolvedValue({data:{id:'id',status},error:null}), from=vi.fn()
+  const routine={id:'id',updated_at:'2026-10-18T12:00:00.123456Z',archived_at:action==='restore'?'stamp':null,document:testDocument}
+  await operation({rpc,from} as unknown as SupabaseClient,'owner-a',routine)
+  expect(rpc).toHaveBeenCalledExactlyOnceWith('fitness_manage_routine',{p_id:'id',p_action:action,p_expected_updated_at:routine.updated_at,p_expected_user_id:'owner-a'})
+  expect(from).not.toHaveBeenCalled()
 })
-
 
 test('new custom targets call v2 without fallback even when unavailable', async () => {
   const { blankExercise } = await import('./types')
   const document = {...testDocument,days:[{name:'A',weekday:null,exercises:[{...blankExercise('Sled drag'),planned_sets:[{reps:8,load_kg:12.5,entered_unit:'kg' as const}]}]}]}
   const rpc=vi.fn().mockResolvedValue({data:null,error:{code:'PGRST202'}})
-  await expect(saveRoutine({rpc} as unknown as SupabaseClient,'id',document,'request',null)).rejects.toThrow(/migration 007/)
+  await expect(saveRoutine({rpc} as unknown as SupabaseClient,'id',document,'request',null)).rejects.toThrow(/Routine saving is unavailable/)
   expect(rpc).toHaveBeenCalledTimes(1)
   expect(rpc).toHaveBeenCalledWith('fitness_save_routine_v2',expect.objectContaining({p_document:document,p_request_id:'request'}))
 })
@@ -71,27 +65,22 @@ test('pre-007 read fallback retains old plans and does not hide arbitrary failur
 test('missing relationship cache never silently turns stored targets into an empty plan', async () => {
   const order=vi.fn().mockResolvedValueOnce({data:null,error:{code:'PGRST200'}}).mockResolvedValueOnce({data:[{routine_days:[{routine_exercises:[{planning_mode:'per_set'}]}]}],error:null})
   const from=vi.fn((table:string)=>({select:()=>table==='profiles'?{eq:()=>({maybeSingle:async()=>({data:null,error:null})})}:table==='exercises'?{order:async()=>({data:[],error:null})}:{eq:()=>({order})}}))
-  await expect(loadWorkspace({from} as unknown as SupabaseClient,'owner')).rejects.toThrow(/no targets were discarded/)
+  await expect(loadWorkspace({from} as unknown as SupabaseClient,'owner')).rejects.toThrow(/routine has not been changed/)
 })
 
 
-test('Delete filters owner, intended ID and exact edit timestamp and requires a returned row', async () => {
-  const single=vi.fn().mockResolvedValue({data:{id:'intended'},error:null})
-  const chain={eq:vi.fn(),select:vi.fn()};chain.eq.mockReturnValue(chain);chain.select.mockReturnValue({single})
-  const remove=vi.fn().mockReturnValue(chain);const from=vi.fn().mockReturnValue({delete:remove})
-  const routine={id:'intended',updated_at:'2026-10-18T12:00:00.123456+00:00',archived_at:null,document:testDocument}
-  await expect(deleteRoutine({from} as unknown as SupabaseClient,'owner-a',routine)).resolves.toBeUndefined()
-  expect(from).toHaveBeenCalledWith('routines');expect(remove).toHaveBeenCalledTimes(1)
-  expect(chain.eq.mock.calls).toEqual([['user_id','owner-a'],['id','intended'],['updated_at',routine.updated_at]])
-  expect(chain.select).toHaveBeenCalledWith('id')
-})
 test.each([
-  [{code:'23503'},/workout history/], [{code:'42501'},/not deleted/], [{code:'PGRST116'},/not deleted/], [null,/not deleted/],
-])('Delete errors and missing rows never report success: %j',async(error,message)=>{
-  const single=vi.fn().mockResolvedValue({data:null,error})
-  const chain={eq:vi.fn(),select:vi.fn()};chain.eq.mockReturnValue(chain);chain.select.mockReturnValue({single})
-  const client={from:()=>({delete:()=>chain})} as unknown as SupabaseClient
-  await expect(deleteRoutine(client,'owner',{id:'id',updated_at:'exact',archived_at:null,document:testDocument})).rejects.toThrow(message)
+ ['55000', /unfinished workouts/], ['40001', /changed in another session/], ['PGRST202', /Routine management is unavailable/], ['42501', /not deleted/],
+])('management failure %s is actionable with no direct-delete fallback',async(code,message)=>{
+ const rpc=vi.fn().mockResolvedValue({data:null,error:{code,message:'private internals'}}),from=vi.fn()
+ await expect(deleteRoutine({rpc,from} as unknown as SupabaseClient,'owner',{id:'id',updated_at:'exact',archived_at:null,document:testDocument})).rejects.toThrow(message)
+ expect(from).not.toHaveBeenCalled()
+})
+test('incorrect or missing management acknowledgements never report success',async()=>{
+ const rpc=vi.fn().mockResolvedValueOnce({data:{id:'other',status:'deleted'},error:null}).mockResolvedValueOnce({data:null,error:null})
+ const routine={id:'id',updated_at:'exact',archived_at:null,document:testDocument},client={rpc} as unknown as SupabaseClient
+ await expect(deleteRoutine(client,'owner',routine)).rejects.toThrow(/not deleted/)
+ await expect(restoreRoutine(client,'owner',routine)).rejects.toThrow(/not restored/)
 })
 
 test('saved catalog IDs and names remain readable even when an exercise has been retired', async () => {

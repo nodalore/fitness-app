@@ -7,7 +7,7 @@ const draft = () => createWorkout({ id: crypto.randomUUID(), dayIds: [crypto.ran
 function setup(repository: Partial<WorkoutRepository> = {}) {
   const records = new Map<string, Recovery>()
   const cache = { read: () => structuredClone([...records.values()]), put: (entry: Recovery) => { records.set(entry.draft.id, structuredClone(entry)) }, remove: (id: string) => { records.delete(id) } }
-  const repo = { load: vi.fn().mockResolvedValue([]), save: vi.fn().mockResolvedValue({ revision: 5, status: 'draft' }), ...repository }
+  const repo = { cancel: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue([]), save: vi.fn().mockResolvedValue({ revision: 5, status: 'draft' }), ...repository }
   const sync = new WorkoutSync(repo, cache)
   return { sync, cache, repo, records }
 }
@@ -80,5 +80,57 @@ test('an unstarted stale source can be explicitly saved independently without ch
 test('independent recovery refuses to detach a workout that already has a server copy', async()=>{
  const d=draft(),save=vi.fn().mockRejectedValue(new WorkoutConflict('Changed'))
  const {sync}=setup({save,load:vi.fn().mockResolvedValue([{draft:d,revision:7}])});sync.start(d);await sync.flush();await sync.saveIndependent()
- expect(save).toHaveBeenCalledTimes(1);expect(sync.getSnapshot().error).toMatch(/server copy exists/);sync.close()
+ expect(save).toHaveBeenCalledTimes(1);expect(sync.getSnapshot().error).toMatch(/already saved/);sync.close()
+})
+
+test('cancel before autosave clears the timer, draft and recovery, without saving or finishing', async () => {
+ vi.useFakeTimers();const {sync,repo,records}=setup();const d=draft();sync.start(d)
+ await sync.cancel();await vi.advanceTimersByTimeAsync(1000)
+ expect(repo.cancel).toHaveBeenCalledExactlyOnceWith(d.id);expect(repo.save).not.toHaveBeenCalled()
+ expect(sync.getSnapshot()).toMatchObject({draft:null,status:'idle',cancelRequested:false,cancelling:false,finished:null})
+ expect(records.size).toBe(0);sync.close()
+})
+test('an outstanding autosave cannot drain queued changes or overwrite state after cancellation and a new start', async () => {
+ let resolve!:(value:{revision:number;status:'draft'})=>void
+ const save=vi.fn().mockImplementationOnce(()=>new Promise(done=>{resolve=done})).mockResolvedValue({revision:9,status:'draft'})
+ const {sync,repo,records}=setup({save});const first=draft();sync.start(first);const pending=sync.flush()
+ sync.change({...first,sessionName:'Queued change'});await sync.cancel()
+ const next=draft();sync.start(next);resolve({revision:6,status:'draft'});await pending;await sync.flush()
+ expect(repo.cancel).toHaveBeenCalledExactlyOnceWith(first.id)
+ expect(save).toHaveBeenCalledTimes(2);expect(save.mock.calls[1][0].id).toBe(next.id)
+ expect(sync.getSnapshot()).toMatchObject({draft:{id:next.id},status:'saved',cancelRequested:false})
+ expect(records.size).toBe(0);sync.close()
+})
+test('ambiguous cancellation failure survives refresh and retries cancellation without resending old autosaves', async () => {
+ const cancel=vi.fn().mockRejectedValueOnce(new Error('Cancellation could not be confirmed.')).mockResolvedValue(undefined)
+ const {sync,cache,repo,records}=setup({cancel});const d=draft();sync.start(d);await sync.cancel()
+ expect(sync.getSnapshot()).toMatchObject({cancelRequested:true,cancelling:false,status:'error'})
+ expect(cache.read()[0].cancelRequested).toBe(true)
+ sync.change({...d,sessionName:'Blocked edit'});await sync.flush();expect(repo.save).not.toHaveBeenCalled();sync.close()
+ const restored=new WorkoutSync(repo,cache);await restored.load();restored.resume(restored.getSnapshot().resumable[0])
+ expect(restored.getSnapshot()).toMatchObject({cancelRequested:true,status:'error'})
+ await restored.flush();expect(repo.save).not.toHaveBeenCalled();await restored.cancel()
+ expect(cancel).toHaveBeenCalledTimes(2);expect(records.size).toBe(0);expect(restored.getSnapshot().draft).toBeNull();restored.close()
+})
+test('old save failures cannot overwrite pending cancellation and repeated confirmations stay single flight', async () => {
+ let reject!:(error:Error)=>void,complete!:()=>void
+ const save=vi.fn().mockImplementation(()=>new Promise((_,fail)=>{reject=fail}))
+ const cancel=vi.fn().mockImplementation(()=>new Promise<void>(done=>{complete=done}))
+ const {sync}=setup({save,cancel});sync.start(draft());const writing=sync.flush();const cancelling=sync.cancel()
+ await sync.cancel();reject(new Error('Old network error'));await writing
+ expect(cancel).toHaveBeenCalledTimes(1);expect(sync.getSnapshot()).toMatchObject({cancelling:true,error:''})
+ complete();await cancelling;expect(sync.getSnapshot().draft).toBeNull();sync.close()
+})
+test('cancel is refused while finishing and is unavailable after confirmed completion', async () => {
+ let finish!:(value:{revision:number;status:'completed'})=>void
+ const save=vi.fn().mockResolvedValueOnce({revision:1,status:'draft'}).mockImplementationOnce(()=>new Promise(done=>{finish=done}))
+ const {sync,repo}=setup({save});sync.start(draft());await sync.flush();const finishing=sync.flush(true)
+ await sync.cancel();expect(repo.cancel).not.toHaveBeenCalled();finish({revision:2,status:'completed'});await finishing
+ await sync.cancel();expect(repo.cancel).not.toHaveBeenCalled();expect(sync.getSnapshot().finished).not.toBeNull();sync.close()
+})
+test('completed/ownership refusals preserve the draft and surface a conflict rather than claiming cancellation', async () => {
+ const {sync}=setup({cancel:vi.fn().mockRejectedValue(new WorkoutConflict('Completed workouts cannot be canceled'))})
+ const d=draft();sync.start(d);await sync.cancel()
+ expect(sync.getSnapshot()).toMatchObject({draft:d,status:'conflict',cancelRequested:false,error:'Completed workouts cannot be canceled'})
+ sync.close()
 })

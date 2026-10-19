@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { poundsPerKg, type WorkoutDraft, type WorkoutExercise } from './workoutDraft'
 export type SavedWorkout = { draft: WorkoutDraft; revision: number }
 export type SaveResult = { revision: number; status: 'draft' | 'completed' }
-export type WorkoutRepository = { load(): Promise<SavedWorkout[]>; save(draft: WorkoutDraft, revision: number | null, request: string, finish: boolean): Promise<SaveResult> }
+export type WorkoutRepository = { load(): Promise<SavedWorkout[]>; cancel(id: string): Promise<void>; save(draft: WorkoutDraft, revision: number | null, request: string, finish: boolean): Promise<SaveResult> }
 export class WorkoutConflict extends Error {}
 export function workoutPayload(draft: WorkoutDraft) {
   return { id: draft.id, routineId: draft.routineId, routineDayId: draft.routineDayId ?? null, routineVersion: draft.routineVersion,
@@ -36,16 +36,25 @@ export function workoutRepository(client: SupabaseClient, userId: string): Worko
         })),
       } }))
     },
+    async cancel(id) {
+      const { data, error } = await withTimeout(signal => client.rpc('fitness_cancel_workout', { p_session_id: id, p_expected_user_id: userId }).abortSignal(signal))
+      if (error) {
+        if (error.code === 'PGRST202' || error.code === '42883') throw new Error('Cancel Workout is unavailable right now. Your workout is kept; please try again later.')
+        if (error.code === '55000' || error.code === '42501') throw new WorkoutConflict('Cancellation refused. This workout may already be completed or unavailable. Your saved routine is unchanged.')
+        throw new Error('Cancellation could not be confirmed. Retry cancellation; your saved routine is unchanged.')
+      }
+      if (!data || data.id !== id || data.status !== 'canceled') throw new Error('Cancellation could not be confirmed. Retry cancellation; your saved routine is unchanged.')
+    },
     async save(draft, revision, request, finish) {
       const { data, error } = await withTimeout(signal => client.rpc('fitness_save_workout', { p_document: workoutPayload(draft), p_expected_revision: revision, p_request_id: request, p_expected_user_id: userId, p_finish: finish }).abortSignal(signal))
       if (error) {
-        if (error.code === '40001' || error.code === '55000' || error.code === '42501') throw new WorkoutConflict('This workout or its routine changed in another session. Reload before saving; your recovery copy is kept.')
-        if (error.code === 'PGRST202' || error.code === '42883') throw new Error('Workout saving requires reviewed migration 008. Hosted installation needs separate approval. Your recovery copy is kept.')
-        if (error.code === '22023') throw new Error('Some workout details are invalid. Review the sets and retry; your recovery copy is kept.')
-        throw new Error('Workout not saved. Check your connection and retry. Your recovery copy is kept.')
+        if (error.code === '40001' || error.code === '55000' || error.code === '42501') throw new WorkoutConflict('This workout or its routine changed in another session. Reload before saving; your changes are kept on this device.')
+        if (error.code === 'PGRST202' || error.code === '42883') throw new Error('Workout saving is unavailable right now. Your changes are kept on this device.')
+        if (error.code === '22023') throw new Error('Some workout details are invalid. Review the sets and retry; your changes are kept on this device.')
+        throw new Error('Workout not saved. Check your connection and retry. Your changes are kept on this device.')
       }
-      if (!data || !Number.isSafeInteger(data.revision) || !['draft','completed'].includes(data.status)) throw new Error('Save could not be confirmed. Retry; your recovery copy is kept.')
-      if ((data.currentRevision !== undefined && data.currentRevision !== data.revision) || (data.currentStatus !== undefined && data.currentStatus !== data.status)) throw new WorkoutConflict('A newer workout version exists. Reload before saving; your recovery copy is kept.')
+      if (!data || !Number.isSafeInteger(data.revision) || !['draft','completed'].includes(data.status)) throw new Error('Save could not be confirmed. Retry; your changes are kept on this device.')
+      if ((data.currentRevision !== undefined && data.currentRevision !== data.revision) || (data.currentStatus !== undefined && data.currentStatus !== data.status)) throw new WorkoutConflict('A newer workout version exists. Reload before saving; your changes are kept on this device.')
       return { revision: data.revision, status: data.status } as SaveResult
     },
   }

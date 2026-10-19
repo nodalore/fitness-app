@@ -22,7 +22,7 @@ test.each(['40001','55000','42501'])('conflicts %s cannot silently overwrite new
 test('missing migration and invalid acknowledgements never report success or fall back to routine saving', async () => {
  const rpc = vi.fn().mockReturnValueOnce(response(null, { code: 'PGRST202' })).mockReturnValueOnce(response({ status: 'draft', revision: '8' }, null))
  const repo = workoutRepository({ rpc } as unknown as SupabaseClient, 'owner')
- await expect(repo.save(draft(),null,'request',false)).rejects.toThrow(/migration 008/)
+ await expect(repo.save(draft(),null,'request',false)).rejects.toThrow(/Workout saving is unavailable/)
  await expect(repo.save(draft(),null,'request',false)).rejects.toThrow(/could not be confirmed/)
 })
 test('resume queries owner/draft only and restores actual rows in order, snapshots, entered weight and zero/NULL', async () => {
@@ -55,4 +55,17 @@ test('a stalled network request times out without claiming success and remains r
 test('acknowledging an old retry never rebases queued edits onto a newer or completed server workout', async()=>{
  const rpc=vi.fn().mockReturnValue(response({revision:3,status:'draft',currentRevision:9,currentStatus:'completed'},null))
  await expect(workoutRepository({rpc} as unknown as SupabaseClient,'owner').save(draft(),null,'old-request',false)).rejects.toBeInstanceOf(WorkoutConflict)
+})
+
+test('cancellation sends one ownership-checked RPC and validates the exact canceled workout acknowledgement',async()=>{
+ const rpc=vi.fn().mockReturnValueOnce(response({id:'workout',status:'canceled'},null)).mockReturnValueOnce(response({id:'different',status:'canceled'},null))
+ const repo=workoutRepository({rpc} as unknown as SupabaseClient,'owner')
+ await expect(repo.cancel('workout')).resolves.toBeUndefined()
+ expect(rpc).toHaveBeenCalledWith('fitness_cancel_workout',{p_session_id:'workout',p_expected_user_id:'owner'})
+ await expect(repo.cancel('workout')).rejects.toThrow(/could not be confirmed/)
+})
+test.each(['PGRST202','55000','42501','network'])('cancellation failure %s preserves data and never falls back to direct deletion',async code=>{
+ const rpc=vi.fn().mockReturnValue(response(null,{code})),from=vi.fn(),repo=workoutRepository({rpc,from} as unknown as SupabaseClient,'owner')
+ await expect(repo.cancel('workout')).rejects.toThrow(code==='PGRST202'?/Cancel Workout is unavailable/:code==='network'?/Retry cancellation/:/Cancellation refused/)
+ expect(from).not.toHaveBeenCalled()
 })

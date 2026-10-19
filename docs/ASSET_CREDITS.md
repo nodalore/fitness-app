@@ -9,3 +9,7 @@
 ## Exercise photographs removed
 
 The user's latest Stage 3 corrections withdraw the exercise-photography requirement. All exercise-photo files, runtime mappings, provenance JSON and attribution UI were removed. No exercise-photo coverage gate remains. Exercises in the recommendation preview use original short text descriptions from `src/features/routines/exerciseDescriptions.ts`. Create My Own Routine does not display automatic explanations or exercise media. The decorative gym-floor assets credited above remain separate and are not demonstrations.
+
+## UI polish placement
+
+The existing licensed gym-floor WebP asset is reused for the compact Discover recommendation thumbnail and the restrained Dashboard banner. CSS crops and a subtle desaturation keep it consistent with charcoal/beige surfaces; no new photo downloads or exercise-demonstration media were introduced. Both placements share the existing responsive 720/1440 WebP sources and browser cache. Shared original inline SVG icons now cover chevrons, close controls and navigation arrows; the dropdown/disclosure CSS uses the matching chevron path. No icon/font package or external asset request was added.

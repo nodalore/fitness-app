@@ -1,3 +1,71 @@
+# Final focused migration 010 security review — current handoff
+
+Migrations 001–009 are installed per user confirmation and remain byte-for-byte unchanged (SHA-256 verified against review-start contents). **010 is still local/unapplied.** No hosted SQL, queries, credentials or real data were used. Existing Stage 3/4 work and stage-3-stable are unchanged.
+
+Found and corrected a trigger boundary missed by the initial tests: exact authenticated/anon role-name checks let inherited app roles detach or change completed root data, and unrelated SECURITY DEFINER paths could detach without deletion authorization. Three regressions failed before correction. Corrected 010 requires an exact FK-only update plus authenticated owner and private owner/routine/full-transaction-ID authorization created by Delete after all preconditions. No other completed UPDATE is accepted, including ordinary privileged writes. Client flags cannot forge authorization; committed markers expire for authorization purposes. Permanent-deletion retry markers still block routine resurrection.
+
+Completed DELETE now permits only a table-owning maintenance cascade after the auth account is actually gone. A custom role with auth.users RLS hiding the account cannot exploit that exception. Legitimate account cleanup is tested. Archive/Restore/Delete preserve completed dates, names, exercise/substitution snapshots, reps, weights, units, set rows, revision/timestamps and receipts. Unfinished workouts still block deletion.
+
+Validation: **507 tests / 28 files**, TypeScript/build passed (existing nonblocking bundle-size warning), including **21 focused migration-010 PostgreSQL tests**. **39 native PostgreSQL 18.4 security/concurrency scenarios** passed. Native tests use restricted session authorization with authenticated, inherited member, anon, outsider and custom limited roles, direct SQL operations and privileged-writer probes; role escalation to postgres is denied. No mocks substitute for database access-control checks.
+
+No remaining local installation blocker found after correction. Review the UPDATED 010 and docs/ROUTINE_MANAGEMENT_REVIEW.md before separate hosted installation approval. Hosted acceptance remains pending. No new UI features or commits; all work remains preserved/uncommitted.
+
+---
+
+# Routine management / migration 010 — current handoff
+
+**Latest confirmed hosted state: migrations 001–009 are applied**, per explicit user confirmation that 009 is installed. This supersedes historical entries describing 009 as a local draft. Their SQL files remain unchanged. User approved local implementation of Archive, Restore and permanent Delete preserving completed History, with unfinished workouts blocking deletion. **010 is implemented/tested locally and UNAPPLIED hosted; STOP before hosted SQL.** No hosted access, credentials, real records or SQL execution occurred.
+
+Active routines: Edit / Archive / Delete. Archived: Restore / Delete. Both action lists use an authenticated ownership/version-checked management RPC. Restore reactivates the same ID, no new save/copy. Delete confirmation explicitly keeps completed History. Same-device active drafts and unsent recovery block deletion; server also locks/checks persisted unfinished sessions. Users finish or explicitly cancel them first; management never deletes draft data.
+
+010 retains NO ACTION source FKs, adds private deletion markers and a routine identity/insert guard, routes direct DELETE through its validated RPC, and permits only trusted, exact source-link detachment on completed workout roots. Actual names/dates/substitutions/sets/weights/reps/units and root revision/timestamps remain unchanged, including legacy values; save receipts remain valid. Both original save RPCs retain SECURITY INVOKER and their bodies, while the insert guard prevents deleted-ID resurrection through retries or direct SQL. Owner RLS is not relaxed. Account advisory/row locks coordinate saves, starts, finishes and management. No installation-time data rewrite.
+
+Validation: npm run check — **498 tests / 28 files**, TypeScript and production build passed (existing nonblocking chunk-size warning). **12 focused 010 PostgreSQL tests** verify populated preservation, both deletion states, restore identity/targets, complete History equality, legacy values, ownership, draft handling, rollback and retry protection. **32 native PostgreSQL 18.4 concurrency scenarios** passed, including nine management scenarios. No installed migration diffs. stage-3-stable remains 24be6832b37180e8846fbe1c832847238f6599f1; all earlier uncommitted History, cancellation and UI work is retained. No commit requested/performed.
+
+Review docs/ROUTINE_MANAGEMENT_REVIEW.md and the complete supabase/migrations/202610180010_routine_management.sql before separate installation approval. Hosted management acceptance and browser/device confirmation/focus checks remain pending. Completely unsent drafts on another device follow existing conflict/recovery if deletion wins before their first save; no unsent values are silently discarded. No charts, analytics or history editing.
+
+---
+
+# Focused UI/UX polish — current handoff
+
+User authorized visual refinements only, preserving every existing feature and data boundary. Inspected Dashboard, Discover, My routines, RoutineEditor, Today's Workout, History and Profile plus shared shell/CSS. Existing uncommitted History/cancellation work is retained; migration 009 remains its prior local/unapplied draft. Installed 001–008, SQL/RLS, persistence/recovery/cancellation logic and stage-3-stable were not changed by this pass. No hosted calls, credentials or real data access.
+
+Replaced text arrows/plus/minus/close glyphs with the shared original inline SVG icon system; normalized native-select chevrons and disclosure indicators without changing native keyboard/select behavior. Added consistent label spacing to workout controls outside forms, removed negative helper/catalog spacing, normalized radii/input/touch heights, improved narrow planned-set layouts and mobile nav labels, and aligned warm beige accents across the planning/logging surfaces. Reduced the Dashboard banner and reused the credited local optimized gym WebP as a compact Discover thumbnail; no exercise photos, icon dependencies or external font/image loads. Removed the obsolete Dashboard “logging coming later” note.
+
+Exercise descriptions remain controlled, initially collapsed and single-open within the recommendation. Extra routine notes no longer show long explanations automatically: recommendation notes expand with their exercise; saved notes use a separate closed disclosure. Hip Thrust has an explicit regression for request/open/close/switch, preserving the source document and targets. Custom exercise forms keep inputs and optional notes, with no automatic explanations. History remains read-only; logging, Finish and Cancel handlers are unchanged.
+
+Validation: 478 tests / 27 files, TypeScript and production build passed; existing nonblocking main-chunk-size warning remains. Isolated Playwright MCP script scripts/ui-polish-browser.js passed 44 geometry/interaction checks at 320/390/768/1440 widths, including Profile at 150% CSS zoom with a 600px viewport. All remote requests/WebSockets were blocked, auth and repositories synthetic; no private browser context was reused. Checks cover all requested pages, one-open explanations, form/actual-set controls, Keep Workout preserving reps, and actual History units. Screenshot review covered desktop Dashboard/History and narrow Discover/editor/Today/Profile. Generated preview-polish-*.png files are ignored.
+
+Remaining manual acceptance: real-device Safari/Firefox/mobile pickers, virtual keyboard, OS text scaling/browser zoom and live-account visual smoke checks. Synthetic browser acceptance does not establish hosted persistence. Current stage-3-stable stays 24be6832b37180e8846fbe1c832847238f6599f1; HEAD remains df4f13317b5886bf22730697b4c598981b4361ac. Work is uncommitted. See docs/UI_POLISH_REVIEW.md.
+
+---
+
+# Stage 4 Cancel Workout — current handoff
+
+User authorized a focused cancel-active-workout implementation and local testing. **Forward migration 009 is required and remains local/unapplied; STOP before hosted installation.** Migrations 001–008, stage-3-stable and all existing uncommitted History work remain preserved. No hosted SQL or real data access occurred.
+
+Implemented secondary Cancel Workout, exact requested confirmation and Keep / Yes actions. Confirmation preserves everything until accepted. Accepted cancellation uses owner-checked atomic RPC cleanup of only the unfinished root, receipts, exercises and performed sets; planned routines are untouched. A private cancellation-ID marker plus guarded save wrapper blocks late/retried autosaves from recreating deleted sessions. Completed work cannot be canceled. Markers retain only identity/time and cascade on account deletion. The original 008 save body is renamed to a private executable helper by 009; no installed migration file is edited.
+
+Frontend stops queued saves, ignores old in-flight results, persists pending cancellation across refresh, freezes edits during ambiguous cancellation and offers a single retry action. It returns to blank routine/session selection only after confirmation. Missing 009 reports an error and preserves recovery rather than pretending deletion succeeded. Full SQL/security/interaction details and review steps: docs/CANCEL_WORKOUT_REVIEW.md.
+
+Checks: 476 tests / 27 files, TypeScript and production build passed; 23 native PostgreSQL 18.4 concurrency scenarios passed, including five cancel/save/finish/direct-insert races. Seven focused cancellation DB tests include direct authenticated privilege/ownership attacks, preservation, rollback and deletion cleanup. The existing nonblocking main-chunk build warning remains. Hosted 009 installation, dedicated test-account cleanup/retry/isolation and real responsive/browser acceptance remain pending. Do not execute hosted SQL without separate approval. No progress charts or other features added.
+
+---
+
+# Stage 4 Workout History — current handoff (2026-10-18)
+
+**Controlling status:** user reports migration 008 workout saving successfully tested in hosted Supabase: completed sessions, exercises and performed sets are present. Treat 001–008 as installed and immutable. This supersedes earlier entries saying 008 is unapplied and History must wait. Hosted success is user-reported; this implementation made no hosted calls, SQL changes or data writes.
+
+Implemented a read-only, lazy-loaded /history page and Workout History navigation immediately below My routines. Owner-filtered completed-only SELECT reads use existing RLS and actual snapshots, newest started_at first with stable ID tie-breaking and 20-card pagination. No routine/catalog joins, planned target reads, RPCs or migrations. Cards count valid included performed sets/exercises. Opening shows ordered actual names and set tables with exact entered weight/unit, legacy kg-to-original-unit fallback, replacement notes, extra exercises, and distinct skipped/removed/not-performed labels. Incomplete sets and unfinished sessions never qualify as performed history.
+
+Loading, empty, retry/error states and navigation back to Today's Workout are included. Details are read-only, focus moves to the detail heading and returns to the originating card, and keyed account state ignores stale requests after account changes/sign-out. Mobile navigation accommodates five links; cards stack on narrow screens, with wrapping headers and compact set tables.
+
+Validation: npm run check passed 455 tests / 26 files, TypeScript and production build. Ten new regressions cover snapshot ordering/counts/units, legacy fallback/zero/bodyweight, replacements/skips/extras/removals/incomplete rows, owner/completed filters, pagination, error retry, refresh/remount, account isolation/stale requests and sidebar routing. Existing migration/security/persistence regressions passed as part of the full suite. Production build emitted a nonblocking main-chunk size warning (about 501 kB minified); History itself is lazy-loaded.
+
+Remaining manual acceptance: open the hosted completed workout in History, confirm exact recorded values and replacement/skip details, refresh/sign-out/in, verify two-account isolation and newest-first pages; check desktop/mobile/320px/short-height/zoom/touch layout and keyboard focus in a real browser. No browser or hosted acceptance was performed in this milestone. No charts, analytics, history editing or Stage 5. stage-3-stable remains 24be6832b37180e8846fbe1c832847238f6599f1; prior saving/security commits retained.
+
+---
+
 # Final focused migration 008 security review — 2026-10-18
 
 This entry supersedes earlier receipt/actual-set descriptions. Migration 008 remains unapplied hosted; 001–007 and stage-3-stable are unchanged. Found and corrected three issues: forgeable client-inserted receipts, incomplete draft rows marked completed, and weighted finishes without weight. Receipts are now owner-readable only; the narrowly scoped SECURITY DEFINER save RPC writes them after ownership/payload/revision validation. Receipt-to-session NO ACTION prevents direct deletion of retry evidence; auth-account cleanup still cascades.
@@ -385,3 +453,27 @@ When the user explicitly resumes:
 7. Update historical guides and final handoff. Only after separate approval/installation of reviewed 006/007 perform approved hosted acceptance with appropriate test accounts; never request passwords in chat. Distinguish implemented features, local evidence and unverified live acceptance. Do not start Stage 4.
 
 **Current stopping point: handoff updated; wait for the user. Do not continue implementation automatically.**
+
+## Public content cleanup — 2026-10-18
+
+Replaced the Our Approach page with Lorena's complete creator note and clickable feedback email. Added a restrained, responsive charcoal/beige letter layout. The footer now reads “© 2026 Fitness App.” Removed the obsolete Home development notice and replaced visible setup/migration terminology in page fallbacks, save messages, and error messages with plain user guidance. Saving/Saved, errors, retry controls, and warnings about unsaved work remain. Only copy and presentation changed; authentication, persistence operations, schemas, migrations, and workout behavior are unchanged.
+
+Validation: all 507 tests across 28 files pass, TypeScript passes, production build passes, and git diff --check passes. Regression coverage verifies creator content, mailto link, navigation, footer, and removal of public development copy; existing persistence/error tests use the updated wording. No hosted SQL, hosted data changes, deployment, or Git branch changes. stage-3-stable remains 24be6832b37180e8846fbe1c832847238f6599f1. Desktop/mobile visual review of the creator note remains manual; no browser visual test was run for this cleanup.
+
+## Minimal public landing — 2026-10-18
+
+Home now contains only the existing gym photograph, “Make your training easier.” headline, and “Explore our approach” link within its hero. Removed the introductory copy and three informational cards. Scoped landing styles pair the existing modern body typography with an editorial serif accent, responsive photograph positioning, and a dark contrast overlay. The header brand always links to / for authenticated and unauthenticated visitors. Removed the Dashboard training-guide card and allowed the existing routines area to fill its row. Other pages and application behavior are unchanged.
+
+Validation: 509 tests pass across 28 files, TypeScript and production build pass. Isolated Playwright checks at 320/390/768/1440px verify image loading, no horizontal overflow, headline/button containment, no overlap, approach navigation and logo return navigation; desktop/mobile screenshots inspected. Remote requests and WebSockets blocked, synthetic missing-client configuration only; no hosted access. stage-3-stable untouched.
+
+## Saved routine editor disclosures — 2026-10-18
+
+Existing routine editing now starts with all exercise forms closed across sessions. Exercise rows toggle a single selected form, expose expanded state, and highlight the selected row. Closing, switching exercises, and switching days retain edits in the local draft; Save Changes includes those edits even while forms are closed. Add Exercise explicitly opens the retained entry buffer when forms are closed. New routines keep the existing empty entry workflow. Removing an exercise in an existing routine no longer automatically opens a neighboring exercise. No persistence, SQL, schema, authentication, or workout-logging changes.
+
+Validation: all 510 tests across 28 files pass, TypeScript passes, production build passes, and git diff --check passes. Regression tests cover initially collapsed forms, explicit toggle/open/close, exclusive selection, exact saved reps/weights/units and legacy values, edits across collapse/day changes and Save, source preservation, and the unchanged empty new-routine workflow.
+
+## Pre-submission verification — 2026-10-18
+
+User authorized committing all completed tested application work, without pushing or publishing. Final verification: 510 tests / 28 files, TypeScript, production build, git diff --check, and 39 native PostgreSQL security/concurrency scenarios all pass. Native tests use a disposable local cluster only; no hosted SQL/data access. Credential-pattern review of tracked and untracked non-ignored source found only deliberate synthetic configuration-test values. Private environment files, generated builds, dependency folders, screenshots and temporary PostgreSQL output remain ignored and excluded. The tracked .env.example contains placeholder public configuration only.
+
+No Git remotes are configured, so no linked GitHub URL or public/private visibility can be verified. stage-3-stable remains 24be6832b37180e8846fbe1c832847238f6599f1. Commit includes completed History, cancellation, routine management, forward migration files 009/010, security/regression tests, UI polish and final content/editor refinements. User confirms 001–009 are installed; corrected 010 is still unapplied hosted and requires separate installation approval and live acceptance before relying on Archive/Restore/Delete. Local build is ready; end-to-end release acceptance remains conditional on that database step and deployment configuration. No push, deployment or hosted changes authorized/performed.

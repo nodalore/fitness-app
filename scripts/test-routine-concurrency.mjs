@@ -67,7 +67,7 @@ try {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to anon,authenticated; grant execute on function auth.uid() to anon,authenticated;`)
   await admin.query('insert into auth.users values ($1),($2)', [A, B])
-  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql','202610180004_profile_frequency.sql','202610180005_catalog_expansion.sql','202610180006_profile_gender.sql','202610180007_custom_planning.sql','202610180008_workout_saving.sql']) {
+  for (const file of ['202610170001_schema.sql','202610170002_reference_seed.sql','202610170003_routine_save.sql','202610180004_profile_frequency.sql','202610180005_catalog_expansion.sql','202610180006_profile_gender.sql','202610180007_custom_planning.sql','202610180008_workout_saving.sql','202610180009_cancel_workout.sql']) {
     await admin.query(await readFile(resolve(root, 'supabase/migrations', file), 'utf8'))
   }
   console.log(`Local PostgreSQL ${String((await admin.query('show server_version')).rows[0].server_version).split(' ')[0]}; separate connections; Supabase is not used.`)
@@ -266,7 +266,257 @@ try {
   await first.query('rollback')
   await begin(second);assert.deepEqual(await writeWorkout(second,updatedWorkout,updatedResult.revision,finishRequest,true),finishedResult);await second.query('commit')
   pass('authenticated receipt forgery is denied; the original finish receipt still retries correctly')
-  console.log('18 multi-connection scenarios passed. Local test data will be removed. No hosted access or credentials used.')
+  const cancellationDocument=()=>{
+    const value=structuredClone(workoutDocument)
+    value.id=randomUUID();value.routineId=null;value.routineDayId=null;value.routineVersion=null
+    value.exercises[0].id=randomUUID();value.exercises[0].sets[0].id=randomUUID()
+    return value
+  }
+  const cancelWorkout=async(client,sid)=>(await client.query('select fitness_cancel_workout($1,$2) as result',[sid,A])).rows[0].result
+  currentTest='in-flight first autosave commits before cancellation'
+  const savedThenCanceled=cancellationDocument(),savedToken=randomUUID()
+  await begin(first);await writeWorkout(first,savedThenCanceled,null,savedToken)
+  await begin(second);const cancelAfterSave=cancelWorkout(second,savedThenCanceled.id).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await cancelAfterSave).value.status,'canceled');await second.query('commit')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where id=$1',[savedThenCanceled.id])).rows[0].n,0)
+  assert.equal((await admin.query('select count(*)::int as n from workout_sets where session_exercise_id=$1',[savedThenCanceled.exercises[0].id])).rows[0].n,0)
+  await begin(first);await assert.rejects(writeWorkout(first,savedThenCanceled,null,savedToken),error=>error.code==='55000');await first.query('rollback')
+  pass('cancellation waits for an in-flight autosave, deletes its actuals and rejects its retry')
+
+  currentTest='cancellation commits before delayed first autosave'
+  const canceledBeforeSave=cancellationDocument()
+  await begin(first);await cancelWorkout(first,canceledBeforeSave.id)
+  await begin(second);const lateFirstSave=writeWorkout(second,canceledBeforeSave,null,randomUUID()).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await lateFirstSave).error?.code,'55000');await second.query('rollback')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where id=$1',[canceledBeforeSave.id])).rows[0].n,0)
+  pass('a delayed first autosave cannot recreate a canceled workout')
+
+  currentTest='cancellation wins against concurrent finish'
+  const cancelWins=cancellationDocument()
+  await begin(first);const cancelInitial=await writeWorkout(first,cancelWins,null,randomUUID());await first.query('commit')
+  await begin(first);await cancelWorkout(first,cancelWins.id)
+  await begin(second);const losingFinish=writeWorkout(second,cancelWins,cancelInitial.revision,randomUUID(),true).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await losingFinish).error?.code,'55000');await second.query('rollback')
+  pass('cancellation wins atomically against a concurrent finish without creating history')
+
+  currentTest='finish wins against concurrent cancellation'
+  const finishWins=cancellationDocument(),winningFinishToken=randomUUID()
+  await begin(first);const finishInitial=await writeWorkout(first,finishWins,null,randomUUID());await first.query('commit')
+  await begin(first);await writeWorkout(first,finishWins,finishInitial.revision,winningFinishToken,true)
+  await begin(second);const losingCancel=cancelWorkout(second,finishWins.id).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await losingCancel).error?.code,'55000');await second.query('rollback')
+  assert.equal((await admin.query('select status from workout_sessions where id=$1',[finishWins.id])).rows[0].status,'completed')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sets where session_exercise_id=$1',[finishWins.exercises[0].id])).rows[0].n,1)
+  pass('a committed finish refuses cancellation and preserves its exact actual sets')
+
+  currentTest='direct insert waits for pending cancellation marker'
+  const directId=randomUUID()
+  await begin(first);await cancelWorkout(first,directId)
+  await begin(second);const lateDirectInsert=second.query("insert into workout_sessions(id,user_id,routine_name_snapshot,day_name_snapshot) values($1,$2,'Late insert','Session')",[directId,A]).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await lateDirectInsert).error?.code,'55000');await second.query('rollback')
+  pass('direct authenticated inserts serialize with cancellation and cannot bypass its marker')
+  currentTest='upgrade populated database to routine management 010'
+  await admin.query(await readFile(resolve(root,'supabase/migrations/202610180010_routine_management.sql'),'utf8'))
+  const managePlan=async(client,id,action,version)=>(await client.query('select fitness_manage_routine($1,$2,$3::timestamptz,$4) as result',[id,action,version,A])).rows[0].result
+  const newManagedPlan=async()=>{
+    const id=randomUUID(),request=randomUUID()
+    await begin(first);await save(first,id,document,request);await first.query('commit')
+    return {id,request,version:await stamp(admin,id),day:(await admin.query('select id from routine_days where routine_id=$1',[id])).rows[0].id}
+  }
+  const managedWorkout=p=>{
+    const value=cancellationDocument();value.routineId=p.id;value.routineDayId=p.day;value.routineVersion=p.version;return value
+  }
+  currentTest='concurrent restores keep one existing routine'
+  const restored=await newManagedPlan()
+  await begin(first);await managePlan(first,restored.id,'archive',restored.version);await first.query('commit')
+  const archivedVersion=await stamp(admin,restored.id)
+  await begin(first);const firstRestore=await managePlan(first,restored.id,'restore',archivedVersion)
+  await begin(second);const repeatedRestore=managePlan(second,restored.id,'restore',archivedVersion).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.deepEqual((await repeatedRestore).value,firstRestore);await second.query('commit')
+  assert.equal((await admin.query('select count(*)::int as n from routines where id=$1 and archived_at is null',[restored.id])).rows[0].n,1)
+  pass('concurrent restores reactivate the same routine without duplicates')
+
+  currentTest='restore invalidates a pending delete confirmation'
+  await begin(first);await managePlan(first,restored.id,'archive',await stamp(admin,restored.id));await first.query('commit')
+  const staleArchivedVersion=await stamp(admin,restored.id)
+  await begin(first);await managePlan(first,restored.id,'restore',staleArchivedVersion)
+  await begin(second);const staleManagementDelete=managePlan(second,restored.id,'delete',staleArchivedVersion).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await staleManagementDelete).error?.code,'40001');await second.query('rollback')
+  pass('restore invalidates a concurrent stale permanent-delete confirmation')
+
+  currentTest='delete wins against a restore without recreating a routine'
+  const deletedArchived=await newManagedPlan()
+  await begin(first);await managePlan(first,deletedArchived.id,'archive',deletedArchived.version);await first.query('commit')
+  const deletionVersion=await stamp(admin,deletedArchived.id)
+  await begin(first);await managePlan(first,deletedArchived.id,'delete',deletionVersion)
+  await begin(second);const missingRestore=managePlan(second,deletedArchived.id,'restore',deletionVersion).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await missingRestore).error?.code,'42501');await second.query('rollback')
+  pass('a concurrent restore cannot recreate a permanently deleted archived routine')
+
+  currentTest='started draft blocks concurrently deleting its source'
+  const startedPlan=await newManagedPlan(),startedDoc=managedWorkout(startedPlan)
+  await begin(first);await writeWorkout(first,startedDoc,null,randomUUID())
+  await begin(second);const blockedPlanDelete=managePlan(second,startedPlan.id,'delete',startedPlan.version).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await blockedPlanDelete).error?.code,'55000');await second.query('rollback')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sets where session_exercise_id=$1',[startedDoc.exercises[0].id])).rows[0].n,1)
+  pass('a concurrently started unfinished workout blocks routine deletion without losing actuals')
+
+  currentTest='routine deletion wins against a delayed workout start'
+  const removedSource=await newManagedPlan(),lateWorkout=managedWorkout(removedSource)
+  await begin(first);await managePlan(first,removedSource.id,'delete',removedSource.version)
+  await begin(second);const failedStart=writeWorkout(second,lateWorkout,null,randomUUID()).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await failedStart).error?.code,'42501');await second.query('rollback')
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where id=$1',[lateWorkout.id])).rows[0].n,0)
+  pass('routine deletion rejects a delayed workout start safely without orphan records')
+
+  currentTest='committed finish survives concurrent routine deletion'
+  const finishPlan=await newManagedPlan(),finishedDoc=managedWorkout(finishPlan)
+  await begin(first);const finishedInitial=await writeWorkout(first,finishedDoc,null,randomUUID());await first.query('commit')
+  await begin(first);await writeWorkout(first,finishedDoc,finishedInitial.revision,randomUUID(),true)
+  const completedSnapshot=(await first.query("select to_jsonb(s)-array['routine_id','routine_day_id'] as row from workout_sessions s where id=$1",[finishedDoc.id])).rows
+  const performedSnapshot=(await first.query('select * from workout_sets where session_exercise_id=$1',[finishedDoc.exercises[0].id])).rows
+  await begin(second);const deleteAfterFinish=managePlan(second,finishPlan.id,'delete',finishPlan.version).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await deleteAfterFinish).value.status,'deleted');await second.query('commit')
+  assert.deepEqual((await admin.query("select to_jsonb(s)-array['routine_id','routine_day_id'] as row from workout_sessions s where id=$1",[finishedDoc.id])).rows,completedSnapshot)
+  assert.deepEqual((await admin.query('select * from workout_sets where session_exercise_id=$1',[finishedDoc.exercises[0].id])).rows,performedSnapshot)
+  pass('finishing before routine deletion preserves exact completed snapshots, revisions and actual sets')
+
+  currentTest='blocked deletion cannot discard an in-flight finish'
+  const blockedPlan=await newManagedPlan(),blockedDoc=managedWorkout(blockedPlan)
+  await begin(first);const blockedInitial=await writeWorkout(first,blockedDoc,null,randomUUID());await first.query('commit')
+  await begin(first);await assert.rejects(managePlan(first,blockedPlan.id,'delete',blockedPlan.version),error=>error.code==='55000')
+  // An errored statement rolls back its subtransaction locks; the independent
+  // finish must still succeed and the failed deletion leaves its source intact.
+  await begin(second);const finishingAfterBlock=await writeWorkout(second,blockedDoc,blockedInitial.revision,randomUUID(),true);await second.query('commit');await first.query('rollback')
+  assert.equal(finishingAfterBlock.status,'completed')
+  assert.equal((await admin.query('select count(*)::int as n from routines where id=$1',[blockedPlan.id])).rows[0].n,1)
+  pass('a refused deletion leaves routine and workout available for explicit finishing')
+
+  currentTest='deleted routine cannot be recreated by an in-flight original create retry'
+  const retryPlan=await newManagedPlan()
+  await begin(first);await managePlan(first,retryPlan.id,'delete',retryPlan.version)
+  await begin(second);const createRetry=save(second,retryPlan.id,document,retryPlan.request).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await createRetry).error?.code,'55000');await second.query('rollback')
+  pass('permanent deletion blocks a delayed original routine-save retry from resurrecting the plan')
+
+  currentTest='archive wins against a stale routine edit'
+  const archivePlan=await newManagedPlan()
+  await begin(first);await managePlan(first,archivePlan.id,'archive',archivePlan.version)
+  await begin(second);const staleArchivedEdit=save(second,archivePlan.id,{...document,name:'Stale change'},randomUUID(),archivePlan.version).then(value=>({value}),error=>({error}))
+  await waiting(admin,second,'advisory');await first.query('commit');assert.equal((await staleArchivedEdit).error?.code,'22023');await second.query('rollback')
+  pass('a concurrent stale edit cannot unarchive or overwrite an archived routine')
+  currentTest='history security under real restricted session authorization'
+  await admin.query(`create role fitness_history_member nologin inherit;grant authenticated to fitness_history_member;
+    create role fitness_history_outsider nologin;
+    create role fitness_review_session nologin inherit;
+    grant authenticated,anon,fitness_history_member,fitness_history_outsider to fitness_review_session;`)
+  const reviewer=await connect()
+  // SET SESSION AUTHORIZATION makes this a genuinely restricted session: its
+  // SET ROLE checks cannot use the original postgres session user's membership.
+  await reviewer.query('set session authorization fitness_review_session')
+  const reviewQuery=async(role,owner,sql,params=[],spoofFlags=false)=>{
+    await reviewer.query('begin');await reviewer.query(`set local role ${role}`)
+    try {
+      await reviewer.query("select set_config('request.jwt.claim.sub',$1,true)",[owner??''])
+      if(spoofFlags)await reviewer.query("select set_config('fitness.routine_delete','true',true),set_config('fitness.deletion_xid',pg_current_xact_id()::text,true)")
+      const result=(await reviewer.query(sql,params)).rows;await reviewer.query('commit');return result
+    } catch(error){await reviewer.query('rollback');throw error}
+  }
+  const securedPlan=await newManagedPlan(),securedDoc=managedWorkout(securedPlan)
+  await begin(first);await writeWorkout(first,securedDoc,null,randomUUID(),true);await first.query('commit')
+  const securedSnapshot=async()=>({
+    root:(await admin.query("select to_jsonb(s)-array['routine_id','routine_day_id'] as row from workout_sessions s where id=$1",[securedDoc.id])).rows,
+    exercises:(await admin.query('select * from session_exercises where session_id=$1 order by position',[securedDoc.id])).rows,
+    sets:(await admin.query('select s.* from workout_sets s join session_exercises e on e.id=s.session_exercise_id where e.session_id=$1 order by e.position,s.set_number',[securedDoc.id])).rows,
+    receipts:(await admin.query('select * from workout_save_receipts where session_id=$1 order by request_id',[securedDoc.id])).rows,
+  })
+  const immutableHistory=await securedSnapshot()
+  const roles=['authenticated','fitness_history_member']
+  for(const role of roles){
+    const identity=await reviewQuery(role,A,'select current_user,session_user')
+    assert.equal(identity[0].current_user,role);assert.equal(identity[0].session_user,'fitness_review_session')
+    for(const change of ["routine_id=null,routine_day_id=null","routine_day_id=null","routine_name_snapshot='Forged'","day_name_snapshot='Forged'","started_at=started_at-interval '1 day'","completed_at=completed_at+interval '1 day'","status='draft',completed_at=null"])
+      await assert.rejects(reviewQuery(role,A,`update workout_sessions set ${change} where id=$1 returning id`,[securedDoc.id]),error=>error.code==='55000')
+    await assert.rejects(reviewQuery(role,A,'delete from workout_sessions where id=$1',[securedDoc.id]),error=>error.code==='55000')
+    await assert.rejects(reviewQuery(role,A,"update session_exercises set exercise_name_snapshot='Forged' where id=$1",[securedDoc.exercises[0].id]),error=>error.code==='55000')
+    await assert.rejects(reviewQuery(role,A,"update workout_sets set reps=99,entered_load=900,entered_unit='kg' where id=$1",[securedDoc.exercises[0].sets[0].id]),error=>error.code==='55000')
+    await assert.rejects(reviewQuery(role,A,'update workout_sessions set routine_id=null,routine_day_id=null where id=$1',[securedDoc.id],true),error=>error.code==='55000')
+  }
+  await assert.rejects(reviewQuery('authenticated',A,'set local role postgres'),error=>error.code==='42501')
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  pass('restricted authenticated and inherited roles cannot edit, detach, reopen or delete completed history')
+
+  currentTest='unauthorized and foreign-account management attempts'
+  for(const role of ['anon','fitness_history_outsider']) {
+    await assert.rejects(reviewQuery(role,A,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'delete',securedPlan.version,A]),error=>error.code==='42501')
+    await assert.rejects(reviewQuery(role,A,'update workout_sessions set routine_id=null,routine_day_id=null where id=$1',[securedDoc.id]),error=>error.code==='42501')
+  }
+  for(const action of ['archive','restore','delete'])await assert.rejects(reviewQuery('fitness_history_member',B,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,action,securedPlan.version,B]),error=>error.code==='42501')
+  await assert.rejects(reviewQuery('authenticated',B,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'delete',securedPlan.version,A]),error=>error.code==='42501')
+  await assert.rejects(reviewQuery('authenticated',null,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'delete',securedPlan.version,A]),error=>error.code==='42501')
+  assert.deepEqual(await reviewQuery('fitness_history_member',B,'update workout_sessions set routine_id=null,routine_day_id=null where id=$1 returning id',[securedDoc.id]),[])
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  pass('anonymous, unauthorized and foreign-owner roles cannot manage or detach another account history')
+
+  currentTest='deletion authorization cannot be forged and unrelated privileged writers are denied'
+  await admin.query("create function public.test_unrelated_history_writer(sid uuid) returns void language sql security definer set search_path='' as $$update public.workout_sessions set routine_id=null,routine_day_id=null where id=sid$$;revoke all on function public.test_unrelated_history_writer(uuid) from public;grant execute on function public.test_unrelated_history_writer(uuid) to authenticated")
+  for(const role of roles){
+    await assert.rejects(reviewQuery(role,A,'insert into routine_deletions(user_id,routine_id,deleted_version,deletion_xid) values($1,$2,$3::timestamptz,pg_current_xact_id())',[A,securedPlan.id,securedPlan.version]),error=>error.code==='42501')
+    await assert.rejects(reviewQuery(role,A,'update routine_deletions set deletion_xid=pg_current_xact_id()'),error=>error.code==='42501')
+    await assert.rejects(reviewQuery(role,A,'select test_unrelated_history_writer($1)',[securedDoc.id]),error=>error.code==='55000')
+  }
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  pass('private detachment authorization cannot be forged and unrelated SECURITY DEFINER writes are rejected')
+
+  currentTest='old transaction authorization is not reusable'
+  await admin.query('insert into routine_deletions(user_id,routine_id,deleted_version) values($1,$2,$3::timestamptz)',[A,securedPlan.id,securedPlan.version])
+  await assert.rejects(reviewQuery('authenticated',A,'select test_unrelated_history_writer($1)',[securedDoc.id]),error=>error.code==='55000')
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  await admin.query('delete from routine_deletions where user_id=$1 and routine_id=$2',[A,securedPlan.id])
+  await admin.query('drop function public.test_unrelated_history_writer(uuid)')
+  pass('committed deletion markers cannot authorize a different transaction to detach history')
+
+  currentTest='authorized archive restore delete preserve history under restricted real roles'
+  await reviewQuery('authenticated',A,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'archive',securedPlan.version,A])
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  await reviewQuery('fitness_history_member',A,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'restore',await stamp(admin,securedPlan.id),A])
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  await reviewQuery('authenticated',A,'select fitness_manage_routine($1,$2,$3::timestamptz,$4)',[securedPlan.id,'delete',await stamp(admin,securedPlan.id),A])
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  assert.deepEqual((await admin.query('select routine_id,routine_day_id from workout_sessions where id=$1',[securedDoc.id])).rows,[{routine_id:null,routine_day_id:null}])
+  await assert.rejects(reviewQuery('fitness_history_member',A,"update workout_sessions set day_name_snapshot='Forged after delete' where id=$1",[securedDoc.id]),error=>error.code==='55000')
+  pass('authorized Archive Restore and Delete preserve every completed snapshot and actual value')
+
+  currentTest='completed history survives administrative accidents but account cleanup still works'
+  await assert.rejects(admin.query("update workout_sessions set routine_name_snapshot='Accidental edit' where id=$1",[securedDoc.id]),error=>error.code==='55000')
+  await assert.rejects(admin.query('delete from workout_sessions where id=$1',[securedDoc.id]),error=>error.code==='55000')
+  const C='c0000000-0000-4000-8000-000000000001',cleanupPlan=randomUUID()
+  await admin.query('insert into auth.users values($1)',[C])
+  await begin(first,C);await save(first,cleanupPlan);await first.query('commit')
+  const cleanupSource={id:cleanupPlan,day:(await admin.query('select id from routine_days where routine_id=$1',[cleanupPlan])).rows[0].id,version:await stamp(admin,cleanupPlan)}
+  const cleanupDoc=managedWorkout(cleanupSource)
+  await begin(first,C);await first.query('select fitness_save_workout($1::jsonb,null,$2,$3,true)',[JSON.stringify(cleanupDoc),randomUUID(),C]);await first.query('commit')
+  await admin.query('delete from auth.users where id=$1',[C])
+  assert.equal((await admin.query('select count(*)::int as n from workout_sessions where id=$1',[cleanupDoc.id])).rows[0].n,0)
+  assert.deepEqual(await securedSnapshot(),immutableHistory)
+  pass('ordinary privileged history edits are blocked while deliberate auth-account cleanup remains valid')
+  currentTest='RLS-hidden auth rows do not grant maintenance deletion rights'
+  await admin.query(`create role fitness_history_limited nologin;
+    grant fitness_history_limited to fitness_review_session;
+    grant usage on schema public,auth to fitness_history_limited;
+    grant select on auth.users to fitness_history_limited;
+    grant select,delete on workout_sessions to fitness_history_limited;
+    create policy review_limited_read on workout_sessions for select to fitness_history_limited using(auth.uid()=user_id);
+    create policy review_limited_delete on workout_sessions for delete to fitness_history_limited using(auth.uid()=user_id);
+    alter table auth.users enable row level security;alter table auth.users force row level security;`)
+  try {
+    assert.deepEqual(await reviewQuery('fitness_history_limited',A,'select id from auth.users where id=$1',[A]),[])
+    assert.deepEqual(await reviewQuery('fitness_history_limited',A,'select id from workout_sessions where id=$1',[securedDoc.id]),[{id:securedDoc.id}])
+    await assert.rejects(reviewQuery('fitness_history_limited',A,'delete from workout_sessions where id=$1 returning id',[securedDoc.id]),error=>error.code==='55000')
+    assert.deepEqual(await securedSnapshot(),immutableHistory)
+  } finally {await admin.query('alter table auth.users disable row level security;alter table auth.users no force row level security;drop policy review_limited_read on workout_sessions;drop policy review_limited_delete on workout_sessions')}
+  pass('RLS hiding the auth-account row cannot grant a custom role permission to delete completed history')
+  console.log('39 multi-connection/security scenarios passed. Local test data will be removed. No hosted access or credentials used.')
 } catch (error) {
   // Never output native runner configuration or generated passwords.
   console.error(`FAIL ${currentTest}${error?.code ? ` (code ${error.code})` : ''}. Hosted database was not accessed.`)

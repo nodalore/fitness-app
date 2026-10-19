@@ -360,3 +360,50 @@ Frontend uses serialized 400ms autosave, 20-second request timeouts, clear save/
 Status: **008 is a local draft, NOT executed hosted**. Migrations 001–007 remain the last user-confirmed installed set. Local approval does not authorize hosted installation, live account access or data writes. Local checks: **445 tests / 24 files**, TypeScript/build and **18 native concurrency scenarios** passed. Hosted saving/resuming/two-account acceptance and browser viewport/visual checks remain pending. Exact changes/limits and next acceptance steps: docs/WORKOUT_SAVING_REVIEW.md. Keep stage-3-stable unchanged at 24be6832b37180e8846fbe1c832847238f6599f1 and preserve all uncommitted Stage 4 work.
 
 Final focused 008 security review (2026-10-18): authenticated receipt writes are denied; a narrowly scoped SECURITY DEFINER save endpoint with fixed empty search_path writes validated receipts. Receipt retention prevents direct workout deletion from invalidating retries. Server-derived set completion requires valid reps and applicable weight; incomplete rows are draft-only, and custom bodyweight is explicit. Finished-session history must filter parent completion and included valid sets. Direct authenticated mutation and ownership attacks, source routine changes, account cleanup and concurrent retries pass local PostgreSQL regressions. Migration 008 remains unapplied hosted and requires separate approval; no History UI implemented.
+
+
+## 23. Stage 4 — read-only Workout History
+
+User confirmed hosted saving through migration 008 and explicitly approved implementing History. This supersedes prior pending-installation/History gating in §22; migrations 001–008 are installed per user report and must remain unchanged. No hosted SQL or data modification is authorized here.
+
+Add Workout History directly below My routines, with a lazy-loaded /history route. Read authenticated owner's completed workout snapshots only, newest workout date first and stable ID tie-break, with pagination to reach older records. Cards show local workout start date, snapshot session/routine names, performed exercise count and valid included set count. Open a read-only detail view in original exercise/set order, using actual names, entered weight/unit and repetitions. Legacy rows lacking entered_load convert canonical kg to their recorded unit; absent bodyweight load displays a dash, not invented zero. Preserve explicit zero. Planned prescriptions and current routines/catalog must never replace historical values.
+
+Display replacement provenance, additional exercises and distinct skipped/removed/not-performed states. Exclude their sets from counts and exclude incomplete sets; draft sessions never appear. Handle loading/empty/error/retry, signed-out access and account changes without stale private data. Maintain charcoal/beige styling, responsive cards/navigation and accessible keyboard focus. History has no editing, deleting, save RPCs or extra migration. No charts, analytics or Stage 5.
+
+Local verification: 455 tests / 26 files, TypeScript and production build passed; native DB migration/ownership/immutability regressions remain part of the existing full suite. Hosted History and real-browser viewport/touch/zoom acceptance remain manual; hosted saving success above was reported by the user.
+
+
+## 24. Stage 4 — cancel an accidentally started workout
+
+User authorizes this focused feature and local tests only. A secondary Cancel Workout action in Today's Workout asks: “Cancel this workout? All sets and changes recorded in this session will be discarded. Your saved routine will not be affected.” Offer Keep Workout / Yes, Cancel Workout. Keep preserves everything; a confirmed, acknowledged cancellation discards only that user's unfinished workout and actuals and returns to routine/session selection. It never alters the saved routine or creates a History entry. Completed workouts cannot be canceled.
+
+New forward-only 009 is required; 001–008 remain unchanged. A validated ownership-scoped cancellation endpoint atomically removes draft receipts/root and cascades actual children. A private identity/time cancellation marker, shared account lock, protected original-save helper and save wrapper reject late first saves/retries; a direct-insert guard closes the table-write bypass. All RPCs derive owner from auth.uid(), verify the expected account and use fixed empty search_path; clients cannot modify markers or invoke the private helper. Existing RLS and completed guards remain.
+
+Frontend confirmation, queue invalidation, single-flight cancellation, durable pending-cancellation recovery and clear error/retry indicators prevent accidental data recreation or false success. No Done checkbox. Local validation: 476 tests / 27 files, TypeScript/build and 23 native PostgreSQL concurrency scenarios passed. **009 is unapplied hosted and needs separate approval**, followed by live test-account/browser acceptance. No unrelated features or new hosted operations are authorized. See docs/CANCEL_WORKOUT_REVIEW.md.
+
+
+## 25. Focused UI/UX polish
+
+Preserve all Stage 3/4 functionality, data, authentication, SQL/RLS and saved routine/workout behavior. Keep the charcoal/beige identity and existing typefaces. Use the existing original SVG system for modest navigation/expand/close controls; native selects remain accessible with a consistent chevron. Labels, controls, helper text and section borders must not crowd or overlap. Responsive planned-set rows and navigation must fit 320px through desktop widths with usable tap targets.
+
+Exercise explanations start collapsed; recommendation disclosure remains one-open and explicitly closable, including Hip Thrust. Long recommendation notes belong inside the exercise disclosure; saved exercise notes remain available behind a closed notes disclosure. Custom composers do not automatically show descriptions. Reuse the existing credited optimized gym image in restrained Dashboard/Discover placements; never put exercise photos in cards, logging or History tables. History is still read-only. No migrations, chart features or persistence changes.
+
+Local verification: 478 tests / 27 files, TypeScript and production build passed. Isolated synthetic Playwright acceptance passed 44 layout/interaction checks at 320/390/768/1440px; screenshots reviewed. Real-device native pickers/keyboard, OS scaling/browser zoom and authenticated live visuals remain manual. See docs/UI_POLISH_REVIEW.md.
+
+
+## 26. Routine management and independent completed History
+
+User confirms migrations 001–009 are installed and approves local implementation of the routine-management plan. This supersedes prior 009-pending status and the earlier rule requiring Archive for any routine referenced by completed workouts. Existing migration files remain unchanged. Forward-only 010 is local/unapplied and needs separate hosted installation approval.
+
+Active routines offer Edit, Archive and Delete; archived routines offer Restore and Delete. Archive/Restore only change the routine state; Restore preserves the original ID/targets, never creates a duplicate or edits History. Permanent deletion requires confirmation, preserves all completed snapshots/actuals/units/receipts and removes only the selected owned plan and planned children. Completed roots may have their two source FKs cleared by the narrowly trusted management transaction; their performance, names/dates and edit metadata stay unchanged/read-only. Preserve legacy data without revalidating it against current entry bounds. Existing NO ACTION FKs and owner RLS remain.
+
+Linked unfinished workouts block deletion until explicitly finished or canceled. Also check the current device's active/unsent recovery before submission. Serialize actions with saves/starts/finishes using the existing owner lock and row locks; enforce exact confirmation versions, expected authenticated identity, atomic rollback and safe retries. Private deleted-ID markers and insert/identity guards prevent delayed initial saves or direct table access recreating a deleted routine. Authenticate all management RPCs and do not allow direct client DELETE bypasses. Existing v1/v2 save implementations remain caller-privilege functions.
+
+Validation: 498 tests / 28 files, TypeScript/build, 12 focused 010 PostgreSQL tests and 32 native concurrency scenarios passed. Hosted SQL and live data modifications are not authorized; review docs/ROUTINE_MANAGEMENT_REVIEW.md and 010 before separate installation approval. Preserve stage-3-stable and existing uncommitted work. No unrelated features.
+
+
+## 27. Final migration 010 security hardening
+
+The final local review supersedes the earlier generic trusted-writer detachment exception. Completed-workout updates require exact source-FK-only detachment, authenticated ownership and a private authorization bound to owner, source routine and current full transaction ID. Only the public routine Delete path creates that authorization, after ownership/version/draft checks. App callers cannot forge/read/update markers; expired transactions, client flags, custom/inherited roles and unrelated privileged writers do not authorize detachment. All other completed updates are read-only. Completed deletion permits only the table-owning maintenance cascade after actual auth-account deletion; RLS hiding an account is not a cleanup authorization.
+
+Three original regressions reproduced the old role-name/privileged-writer bypass and now pass. Final verification: 507 tests / 28 files, 21 focused 010 PostgreSQL tests, TypeScript/build and 39 native PostgreSQL security/concurrency scenarios passed. Restricted native session roles and direct authenticated/unauthorized table operations were tested. Existing actual snapshots, dates/names/units/sets and receipts stay intact across Archive/Restore/Delete. Migrations 001–009 remain byte-for-byte unchanged. **Corrected 010 remains unapplied hosted**, requiring separate approval and post-install acceptance. See docs/ROUTINE_MANAGEMENT_REVIEW.md.

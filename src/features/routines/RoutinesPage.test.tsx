@@ -3,14 +3,16 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { beforeEach, vi } from 'vitest'
 import { RoutinesPage } from './RoutinesPage'
+import { createWorkout } from '../workouts/workoutDraft'
+import { workoutRecovery } from '../workouts/workoutRecovery'
 import { testCatalog, testDocument, testProfile } from './testFixtures'
-const mocks=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),archive:vi.fn(),delete:vi.fn(),client:{},user:'user-a' as string|null}))
+const mocks=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),archive:vi.fn(),restore:vi.fn(),delete:vi.fn(),client:{},user:'user-a' as string|null}))
 vi.mock('../auth/AuthProvider',()=>({useAuth:()=>({client:mocks.client,session:mocks.user?{user:{id:mocks.user}}:null,loading:false,error:''})}))
-vi.mock('./repository',()=>({loadWorkspace:mocks.load,saveRoutine:mocks.save,archiveRoutine:mocks.archive,deleteRoutine:mocks.delete}))
+vi.mock('./repository',()=>({loadWorkspace:mocks.load,saveRoutine:mocks.save,archiveRoutine:mocks.archive,restoreRoutine:mocks.restore,deleteRoutine:mocks.delete}))
 vi.mock('../workouts/workoutRepository', async importOriginal => ({ ...await importOriginal<typeof import('../workouts/workoutRepository')>(), workoutRepository: () => ({ load: async () => [], save: async () => ({ revision: 1, status: 'draft' }) }) }))
 const saved={id:'routine-a',updated_at:'2026-01-01',archived_at:null,document:testDocument}
 const workspace=()=>({profile:testProfile,catalog:testCatalog,routines:[saved]})
-beforeEach(()=>{vi.clearAllMocks();mocks.user='user-a';mocks.load.mockResolvedValue(workspace());mocks.save.mockImplementation(async(_client,id)=>id);mocks.archive.mockResolvedValue(undefined);mocks.delete.mockResolvedValue(undefined)})
+beforeEach(()=>{localStorage.clear();vi.clearAllMocks();mocks.user='user-a';mocks.load.mockResolvedValue(workspace());mocks.save.mockImplementation(async(_client,id)=>id);mocks.archive.mockResolvedValue(undefined);mocks.restore.mockResolvedValue(undefined);mocks.delete.mockResolvedValue(undefined)})
 function routing(savedView=false){return <MemoryRouter initialEntries={[savedView ? '/routines#saved' : '/routines']}><Routes><Route path="/routines" element={<RoutinesPage/>}/><Route path="/login" element={<h1>Please sign in</h1>}/></Routes></MemoryRouter>}
 function page(savedView=false){return render(routing(savedView))}
 test('signed-out users cannot load routine data',()=>{mocks.user=null;page();expect(screen.getByRole('heading',{name:'Please sign in'})).toBeVisible();expect(mocks.load).not.toHaveBeenCalled()})
@@ -113,10 +115,10 @@ test('confirmed Delete targets only the selected routine; success removes it and
   expect(screen.queryByRole('heading',{name:'My training plan'})).not.toBeInTheDocument()
   expect(screen.getByRole('heading',{name:'Other plan'})).toBeVisible();expect(mocks.load).toHaveBeenCalledTimes(2)
 })
-test('history/permission delete failures retain the routine and never claim success',async()=>{
-  mocks.delete.mockRejectedValue(new Error('This routine is linked to workout history. Use Archive.'))
+test('unfinished/permission delete failures retain the routine and never claim success',async()=>{
+  mocks.delete.mockRejectedValue(new Error('Finish or cancel unfinished workouts before deleting this routine.'))
   const user=userEvent.setup();page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}));await user.click(screen.getByRole('button',{name:'Delete permanently'}))
-  expect(screen.getByRole('alert')).toHaveTextContent('workout history');expect(screen.getByRole('heading',{name:'My training plan'})).toBeVisible()
+  expect(screen.getByRole('alert')).toHaveTextContent('unfinished workouts');expect(screen.getByRole('heading',{name:'My training plan'})).toBeVisible()
   expect(screen.getByRole('status')).not.toHaveTextContent('deleted');expect(mocks.archive).not.toHaveBeenCalled()
 })
 test('archived plans also offer Delete separately from Archive',async()=>{
@@ -161,7 +163,7 @@ test('Discover and My routines show separate content and navigation preserves sa
 test("Today's Workout is separate from saved plans, local-only, and cleared on account change", async () => {
   const user = userEvent.setup(), before = structuredClone(testDocument), view = page(true)
   expect(await screen.findByRole('heading', { name: "Today's Workout" })).toBeVisible()
-  expect(screen.getByRole('heading', { name: /Saved routines/ })).toBeVisible()
+  expect(screen.getByRole('heading', { name: /Active routines/ })).toBeVisible()
   await user.selectOptions(screen.getByLabelText('Choose a saved routine'), saved.id)
   await user.click(screen.getByRole('button', { name: 'Day 1: Full body' }))
   await user.click(screen.getByRole('button', { name: /bodyweight-squat/ }))
@@ -188,4 +190,55 @@ test("Discover does not offer Today's Workout or unsaved recommendations as work
   await screen.findByRole('button', { name: /Open routine/ })
   expect(screen.queryByRole('heading', { name: "Today's Workout" })).not.toBeInTheDocument()
   expect(screen.queryByLabelText('Choose a saved routine')).not.toBeInTheDocument()
+})
+
+test('restoring an archived routine reloads the same ID into active routines without saving a duplicate',async()=>{
+ const archived={...saved,archived_at:'2026-10-01'},user=userEvent.setup()
+ mocks.load.mockResolvedValue({...workspace(),routines:[archived]});page(true)
+ await user.click(await screen.findByText('Archived routines (1)'))
+ expect(screen.queryByRole('button',{name:'Archive My training plan'})).not.toBeInTheDocument()
+ expect(screen.getByRole('button',{name:'Delete My training plan'})).toBeVisible()
+ mocks.load.mockResolvedValue({...workspace(),routines:[saved]})
+ await user.click(screen.getByRole('button',{name:'Restore My training plan'}))
+ expect(mocks.restore).toHaveBeenCalledExactlyOnceWith(mocks.client,'user-a',archived)
+ expect(await screen.findByRole('button',{name:'Edit My training plan'})).toBeVisible()
+ expect(screen.getAllByRole('heading',{name:'My training plan'})).toHaveLength(1)
+ expect(screen.getByRole('status')).toHaveTextContent('Routine restored')
+ expect(mocks.save).not.toHaveBeenCalled();expect(mocks.delete).not.toHaveBeenCalled()
+})
+test('archived routine deletion uses the selected version and explains that completed history is preserved',async()=>{
+ const archived={...saved,archived_at:'2026-10-01'},user=userEvent.setup()
+ mocks.load.mockResolvedValue({...workspace(),routines:[archived]});page(true)
+ await user.click(await screen.findByText('Archived routines (1)'));await user.click(screen.getByRole('button',{name:'Delete My training plan'}))
+ expect(screen.getByRole('alertdialog')).toHaveTextContent('Completed Workout History will be kept')
+ mocks.load.mockResolvedValue({...workspace(),routines:[]})
+ await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+ expect(mocks.delete).toHaveBeenCalledExactlyOnceWith(mocks.client,'user-a',archived)
+ expect(await screen.findByText('No active routines yet.')).toBeVisible()
+})
+test('failed restore retains the archived routine and never claims success or creates another plan',async()=>{
+ const archived={...saved,archived_at:'2026-10-01'},user=userEvent.setup()
+ mocks.load.mockResolvedValue({...workspace(),routines:[archived]});mocks.restore.mockRejectedValue(new Error('This routine changed. Reload and retry.'));page(true)
+ await user.click(await screen.findByText('Archived routines (1)'));await user.click(screen.getByRole('button',{name:'Restore My training plan'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('changed')
+ expect(screen.getByRole('button',{name:'Restore My training plan'})).toBeVisible()
+ expect(screen.getByRole('status')).not.toHaveTextContent('restored');expect(mocks.save).not.toHaveBeenCalled()
+})
+test('a workout active on this device blocks routine deletion before any RPC',async()=>{
+ const user=userEvent.setup();page(true)
+ await screen.findByRole('heading',{name:"Today's Workout"})
+ await user.selectOptions(screen.getByLabelText('Choose a saved routine'),saved.id)
+ await user.click(screen.getByRole('button',{name:'Day 1: Full body'}))
+ await user.click(screen.getByRole('button',{name:'Delete My training plan'}));await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('unfinished workout on this device')
+ expect(mocks.delete).not.toHaveBeenCalled();expect(screen.getByRole('heading',{name:'My training plan'})).toBeVisible()
+})
+
+test('unsent recovered workout progress blocks deletion even before the workout is resumed',async()=>{
+ const user=userEvent.setup(),draft=createWorkout(saved,0,testCatalog)
+ workoutRecovery('user-a').put({draft,revision:null,pending:null,dirty:true})
+ page(true);await user.click(await screen.findByRole('button',{name:'Delete My training plan'}))
+ await user.click(screen.getByRole('button',{name:'Delete permanently'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('unfinished workout on this device')
+ expect(mocks.delete).not.toHaveBeenCalled();expect(workoutRecovery('user-a').read()[0].draft).toEqual(draft)
 })

@@ -41,13 +41,13 @@ test('loads the current account’s saved profile and writes only its own user I
   await user.clear(name); await user.type(name, 'New name')
   await user.click(screen.getByRole('button', { name: 'Save profile' }))
   expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'test-user-a', display_name: 'New name' }), { onConflict: 'user_id', defaultToNull: false })
-  expect(screen.getByRole('status')).toHaveTextContent('Profile saved to Supabase.')
+  expect(screen.getByRole('status')).toHaveTextContent('Profile saved.')
 })
 
 test('missing tables show an actionable load error and retry succeeds', async () => {
   mocks.maybeSingle.mockResolvedValueOnce({ data: null, error: { code: '42P01' } })
   page()
-  expect(await screen.findByRole('alert')).toHaveTextContent('SQL migrations')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Check your connection and retry')
   expect(screen.queryByRole('button', { name: 'Save profile' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Retry loading' }))
   expect(await screen.findByLabelText('Name')).toHaveValue('Saved name')
@@ -91,7 +91,7 @@ test.each(['existing', 'new'])('%s profiles save the detected timezone without a
   await userEvent.selectOptions(screen.getByLabelText('Gender'), 'prefer_not_to_say')
   await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
   expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ timezone: 'Pacific/Auckland', user_id: 'test-user-a' }), { onConflict: 'user_id', defaultToNull: false })
-  expect(screen.getByRole('status')).toHaveTextContent('Profile saved to Supabase.')
+  expect(screen.getByRole('status')).toHaveTextContent('Profile saved.')
 })
 
 test('profile saving falls back to UTC if browser timezone detection is unavailable', async () => {
@@ -101,7 +101,7 @@ test('profile saving falls back to UTC if browser timezone detection is unavaila
   await userEvent.selectOptions(screen.getByLabelText('Gender'), 'prefer_not_to_say')
   await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
   expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ timezone: 'UTC' }), { onConflict: 'user_id', defaultToNull: false })
-  expect(screen.getByRole('status')).toHaveTextContent('Profile saved to Supabase.')
+  expect(screen.getByRole('status')).toHaveTextContent('Profile saved.')
 })
 
 test('legacy profile frequency is suggested without changing old weekdays or saving automatically', async () => {
@@ -121,7 +121,7 @@ test('missing frequency migration is explained and never claims a successful sav
   page()
   await screen.findByLabelText('Name')
   await userEvent.click(screen.getByRole('button', { name: 'Save profile' }))
-  expect(screen.getByRole('status')).toHaveTextContent('migration 006')
+  expect(screen.getByRole('status')).toHaveTextContent('Profile could not be saved')
   expect(screen.getByLabelText('Name')).toHaveValue('Saved name')
 })
 

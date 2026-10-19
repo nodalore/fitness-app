@@ -25,7 +25,7 @@ test('recommendation details are concise text only and one exercise explanation 
   expect(container.querySelectorAll('.exercise-info[open]')).toHaveLength(1)
   expect(screen.queryByText(/Bend at the hips/)).not.toBeInTheDocument()
   expect(screen.getByText('Hold one dumbbell at chest height while squatting and standing.')).toBeVisible()
-  expect(container.querySelector('img,svg,video,iframe')).toBeNull()
+  expect(container.querySelector('img,svg:not(.icon),video,iframe')).toBeNull()
   expect(screen.queryByText(/photograph pending|Photo could/)).not.toBeInTheDocument()
 })
 test('unknown catalog records and unscheduled workouts stay readable without substitution', async () => {
@@ -80,4 +80,35 @@ test('the current session closes with its card or X and reopening resets exercis
   await user.click(screen.getByRole('button', { name: 'Close Upper A' }))
   expect(screen.queryByRole('region')).not.toBeInTheDocument()
   expect(card).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('Hip Thrust explanation and long notes stay hidden until requested and close independently of the session', async () => {
+  const hip = { ...testCatalog[2], id: 'hip-thrust', slug: 'dumbbell-hip-thrust', name: 'Hip Thrust' }
+  const note = 'Keep the bench stable and the dumbbell secured throughout each repetition.'
+  const document = { ...testDocument, days: [{ ...testDocument.days[0], exercises: [
+    { ...testDocument.days[0].exercises[0], exercise_id: hip.id, notes: note },
+    { ...testDocument.days[0].exercises[0], exercise_id: testCatalog[0].id },
+  ] }] }
+  const original = structuredClone(document), user = userEvent.setup()
+  const { container } = render(<RoutinePlan document={document} catalog={[...testCatalog, hip]} showDescriptions />)
+  const explanation = 'Support your upper back on a bench and raise your hips with a dumbbell across the hip crease.'
+  await user.click(screen.getByRole('button', { name: /Full body/ }))
+  expect(screen.queryByText(explanation)).not.toBeInTheDocument(); expect(screen.queryByText(note)).not.toBeInTheDocument()
+  await user.click(screen.getByText('Hip Thrust'))
+  expect(screen.getByText(explanation)).toBeVisible(); expect(screen.getByText(note)).toBeVisible()
+  await user.click(screen.getByText('Hip Thrust'))
+  expect(screen.queryByText(explanation)).not.toBeInTheDocument(); expect(screen.queryByText(note)).not.toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Full body' })).toBeVisible()
+  await user.click(screen.getByText('Hip Thrust')); await user.click(screen.getByText('bodyweight-squat'))
+  expect(screen.queryByText(explanation)).not.toBeInTheDocument(); expect(container.querySelectorAll('.exercise-info[open]')).toHaveLength(1)
+  expect(document).toEqual(original)
+})
+test('saved exercise notes are collapsed and remain available without changing prescriptions', async () => {
+  const note = 'A long personal note that should not crowd the saved routine preview.'
+  const document = { ...testDocument, days: [{ ...testDocument.days[0], exercises: [{ ...testDocument.days[0].exercises[0], notes: note }] }] }
+  render(<RoutinePlan document={document} catalog={testCatalog} expandedSessions />)
+  expect(screen.getByText(note)).not.toBeVisible()
+  await userEvent.click(screen.getByText('Exercise notes'))
+  expect(screen.getByText(note)).toBeVisible(); expect(screen.getByText('8–12 reps')).toBeVisible()
+  await userEvent.click(screen.getByText('Exercise notes')); expect(screen.getByText(note)).not.toBeVisible()
 })

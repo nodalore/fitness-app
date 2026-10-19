@@ -6,7 +6,8 @@ function valid(entry: Recovery): boolean {
   return draft && uuid.test(draft.id) && typeof draft.routineName === 'string' && typeof draft.sessionName === 'string'
     && Array.isArray(draft.exercises) && draft.exercises.length <= 20
     && draft.exercises.every(e => uuid.test(e.id) && typeof e.name === 'string' && Array.isArray(e.sets) && e.sets.length <= 10 && e.sets.every(s => uuid.test(s.id) && ['kg','lb'].includes(s.unit) && actualSetError(s) === null))
-    && typeof entry.dirty === 'boolean' && (entry.dirty || !!entry.pending)
+    && (entry.cancelRequested === undefined || typeof entry.cancelRequested === 'boolean')
+    && typeof entry.dirty === 'boolean' && (entry.dirty || !!entry.pending || entry.cancelRequested === true)
     && (entry.revision === null || Number.isSafeInteger(entry.revision))
     && (!entry.pending || (uuid.test(entry.pending.request) && entry.pending.draft?.id === draft.id && typeof entry.pending.finish === 'boolean' && valid({ draft: entry.pending.draft, revision: entry.pending.revision, pending: null, dirty: true })))
 }

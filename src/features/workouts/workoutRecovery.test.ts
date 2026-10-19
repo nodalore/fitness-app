@@ -21,3 +21,10 @@ test('updating one recovery entry keeps other unfinished workouts and stable pen
  first.pending = { draft: first.draft, request: crypto.randomUUID(), revision: null, finish: false }; cache.put(first); cache.put(second)
  cache.put({ ...first, dirty: false }); expect(cache.read()).toHaveLength(2); expect(cache.read().find(e => e.draft.id === first.draft.id)?.pending?.request).toBe(first.pending.request)
 })
+
+test('a pending cancellation is retained even for an otherwise clean saved workout',()=>{
+ const cache=workoutRecovery('A'),value={...entry(),revision:5,dirty:false,cancelRequested:true}
+ cache.put(value);expect(cache.read()).toEqual([value])
+ expect(workoutRecovery('B').read()).toEqual([])
+ cache.remove(value.draft.id);expect(cache.read()).toEqual([])
+})

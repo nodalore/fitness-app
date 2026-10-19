@@ -1,3 +1,7 @@
+> Current status: user confirms migrations 001–009 are installed. New routine-management migration 010 remains local/unapplied. Routine deletion preserves completed History but blocks linked unfinished workouts; finish or explicitly cancel them first. See [ROUTINE_MANAGEMENT_REVIEW.md](ROUTINE_MANAGEMENT_REVIEW.md). No hosted operations occurred in this implementation.
+
+> Current status: user reports hosted migration 008 saving has passed. Read-only Workout History is now implemented locally at /history; see SPEC.md §23 and the latest NOTES.md entry. Earlier pending-installation/History statements below describe the previous milestone. Hosted History/browser acceptance remains pending; no hosted operations were performed in this change.
+
 # Today's Workout — current status
 
 Updated 2026-10-18. Saving, resuming and finishing are implemented and tested locally. **Hosted saving is pending separate review/application of migration 008 and live test-account acceptance.** Migrations 001–007 are installed per the user; 008 is not applied. See [WORKOUT_SAVING_REVIEW.md](WORKOUT_SAVING_REVIEW.md) for the complete migration/queue/security review and remaining checks.

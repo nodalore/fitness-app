@@ -4,7 +4,7 @@ import { useAuth } from './AuthProvider'
 
 function AuthFrame({ title, children }: { title: string; children: ReactNode }) {
   const { client } = useAuth()
-  return <section className="account-layout"><div className="account-intro"><p className="eyebrow">FITNESS APP / TRAINING JOURNAL</p><h1>{title}</h1><p>Your account is the home for your training record. Start with a profile. Build your routine when you’re ready.</p><span className="journal-stamp">PERSONAL RECORD · VOL. 01</span></div><div className="account-panel">{client ? children : <p role="alert">Supabase is not configured. Add the public project settings to .env.local and restart the app.</p>}</div></section>
+  return <section className="account-layout"><div className="account-intro"><p className="eyebrow">FITNESS APP / TRAINING JOURNAL</p><h1>{title}</h1><p>Your account is the home for your training record. Start with a profile. Build your routine when you’re ready.</p><span className="journal-stamp">PERSONAL RECORD · VOL. 01</span></div><div className="account-panel">{client ? children : <p role="alert">Account access is unavailable right now. Please try again later.</p>}</div></section>
 }
 
 export function LoginPage() {

@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router'
-import { PageHeading } from '../../components/ui'
+import { Icon, PageHeading } from '../../components/ui'
 import { useAuth } from '../auth/AuthProvider'
 import { defaultProfile, detectTimezone, genderOptions, profilePatch, legacyFrequencySuggestion, normalizeProfile, validateProfileForm, type ProfileDraft } from './profile'
 
 export function ProfilePage() {
   const { session, loading, error, client } = useAuth()
-  if (!client) return <section className="reading"><h1>Configure Supabase first</h1><p role="alert">Add the public settings to .env.local and restart the app.</p></section>
+  if (!client) return <section className="reading"><h1>Temporarily unavailable</h1><p role="alert">Please try again later.</p></section>
   if (loading) return <p role="status">Restoring your session…</p>
   if (error) return <section className="reading"><h1>Check your session</h1><p role="alert">{error}</p><Link to="/login">Sign in again</Link></section>
   if (!session) return <Navigate to="/login" replace />
@@ -28,7 +28,7 @@ function ProfileForm({ userId }: { userId: string }) {
     setLoading(true); setLoadError('')
     void client.from('profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
       if (cancelled) return
-      if (error) setLoadError('Unable to load your profile. Check your connection and confirm the reviewed SQL migrations have been applied.')
+      if (error) setLoadError('Unable to load your profile. Check your connection and retry.')
       else setProfile(data ? normalizeProfile(data) : { ...defaultProfile, timezone: detectTimezone() })
       setLoading(false)
     }, () => {
@@ -46,7 +46,7 @@ function ProfileForm({ userId }: { userId: string }) {
     setBusy(true); setMessage('')
     try {
       const { data, error } = await client.from('profiles').upsert(profilePatch(profile, userId), { onConflict: 'user_id', defaultToNull: false }).select('user_id').single()
-      setMessage(error?.code === 'PGRST204' || error?.code === '42703' ? 'Profile was not saved. The required gender field needs reviewed migration 006. Hosted installation requires your approval.' : error || !data ? 'Profile was not saved. Check your connection and database setup, then retry.' : 'Profile saved to Supabase.')
+      setMessage(error?.code === 'PGRST204' || error?.code === '42703' ? 'Profile could not be saved right now. Please try again later.' : error || !data ? 'Profile was not saved. Check your connection and retry.' : 'Profile saved.')
     } catch { setMessage('Profile was not saved. Check your connection and retry.') }
     finally { setBusy(false) }
   }
@@ -59,6 +59,6 @@ function ProfileForm({ userId }: { userId: string }) {
     {profile.training_days_per_week == null && <p className="field-note">{legacyFrequencySuggestion(profile) ? `Your previous availability suggests ${legacyFrequencySuggestion(profile)} days. Confirm your preferred frequency above.` : 'Choose 2–6 days. Your previous availability is preserved.'}</p>}
     <p className="field-note">Train on the days you choose. No fixed weekdays.</p>
     </fieldset>
-    <button disabled={busy} type="submit">{busy ? 'Saving…' : 'Save profile'}</button><p role="status">{message}</p><Link className="text-link" to="/routines">Explore workout routines →</Link>
+    <button disabled={busy} type="submit">{busy ? 'Saving…' : 'Save profile'}</button><p role="status">{message}</p><Link className="text-link" to="/routines">Explore workout routines <Icon name="arrow" /></Link>
   </form>}</div></section>
 }
